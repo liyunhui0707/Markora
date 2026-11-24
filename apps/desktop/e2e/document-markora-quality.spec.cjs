@@ -54,6 +54,18 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
           const pos=view.posAtDOM(element.firstChild,offset);view.focus();
           view.dispatch(view.state.tr.setSelection(view.state.selection.constructor.create(view.state.doc,pos)));
         },offset);
+        const lastRow=editor.locator(':scope > p').last();
+        await place(lastRow,'写作位置：'.length);
+        await page.keyboard.type(' https://e');await expect.poll(async()=>(await snapshot())?.source).toBe(source+' https://e');
+        await page.keyboard.press('Backspace');await expect.poll(async()=>(await snapshot())?.source).toBe(source+' https://');
+        await page.keyboard.type('e');await expect.poll(async()=>(await snapshot())?.source).toBe(source+' https://e');
+        for(let i=0;i<14;i++){
+          const before=(await snapshot()).source;
+          if(before===source)break;
+          await page.keyboard.press('Meta+z');
+          await expect.poll(async()=>(await snapshot()).source).not.toBe(before);
+        }
+        await expect.poll(async()=>(await snapshot())?.source).toBe(source);
         const cell=editor.locator('table').nth(1).locator('td p').first();
         await place(cell,1);
         await cell.evaluate(element=>{
@@ -71,7 +83,7 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
         const last=editor.locator(':scope > p').last();
         await place(last,'写作位置：'.length);
         let expected=source;
-        for(const [raw,tag,value] of [['~~old~~','s','old'],['**bold**','strong','bold'],['*italic*','em','italic'],['`code`','code','code'],['[link](notes.md)','[data-document-link]','link']]){
+        for(const [raw,tag,value] of [['~~old~~','s','old'],['**bold**','strong','bold'],['*italic*','em','italic'],['`code`','code','code'],['[link](https://example.com)','[data-document-link]','link']]){
           await page.keyboard.type(raw);
           expected+=raw;
           await expect.poll(async()=>(await snapshot())?.source).toBe(expected);
@@ -133,6 +145,9 @@ test('markora quality workflow: semantic preview, heading range, quiet status, s
   await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap()).source).toBe(source);
   const formula=page.locator('#editor [data-formula]');
   await expect(formula.locator('math')).toHaveCount(1);
+  await page.keyboard.press('Meta+f');await page.locator('#find-query').fill('x2');
+  await expect(page.locator('#find-count')).toContainText('1 / 1');
+  await page.locator('#find-close').click();
   await expect(page.locator('#editor [data-diagram] img')).toHaveCount(1);
   await expect(page.locator('#editor [data-diagram] small')).toHaveCount(1);
   await page.locator('#editor [data-preview-jump="note"]').click();

@@ -33,12 +33,38 @@ export const spanBlock = (projection, span) => span.containerPath?containerNodeA
   : listNodeAt(projection.doc.content[span.blockIndex],span.itemPath??[span.itemIndex]).content[0];
 
 // Deliberately restricted projection; NOT a serializer. Offsets are UTF-16.
-const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
+// Only tokenizer-produced autolinks own source coordinates. GFM's subsequent
+// regex pass also links partial spellings such as "www." without positions.
+function positionedAutolinks(){
+  for(const group of this.data('fromMarkdownExtensions')){
+    for(const extension of [group].flat(Infinity)){
+      if(extension.enter?.literalAutolink)delete extension.transforms;
+    }
+  }
+}
+const parser = unified().use(remarkParse).use(remarkGfm).use(positionedAutolinks).use(remarkMath);
 const parse = createSourceParser(source => includeProtocolPrefixes(parser.parse(source),source));
 const unsafe = () => ({ ok: false, code: 'unsafe-source-range' });
 const validText = s => typeof s === 'string' && !/[\0\r\n]/.test(s)
   && s.isWellFormed();
 const splits = (s, n) => n > 0 && n < s.length && /[\uD800-\uDBFF]/.test(s[n - 1]) && /[\uDC00-\uDFFF]/.test(s[n]);
+
+// Locate one parser-owned physical inline row. Container markers, ATX closing
+// hashes and link definitions are outside this range.
+export function inlineRowRange(source,offset){
+  function visit(node){
+    if(!node.position||offset<node.position.start.offset||offset>node.position.end.offset)return null;
+    if(['paragraph','heading'].includes(node.type)&&node.position.start.line===node.position.end.line){
+      const first=node.children[0],last=node.children.at(-1);
+      if(!first?.position||!last?.position)return null;
+      const end=last.position.end.offset;
+      return {start:first.position.start.offset,end:/^ +$/.test(source.slice(end,node.position.end.offset))?node.position.end.offset:end};
+    }
+    for(const child of node.children||[]){const range=visit(child);if(range)return range;}
+    return null;
+  }
+  return visit(parse(source));
+}
 
 export function projectSource(source, spliceHint) {
   if (typeof source !== 'string' || source.length > MAX_SOURCE_UNITS) throw Error('Unsupported source');
@@ -92,6 +118,15 @@ export function projectSource(source, spliceHint) {
     let start = node.position.start.offset, end = node.position.end.offset;
     if (start < fm) { if (end > fm) { opaque(source.slice(fm, end),fm); previousEnd = end; } continue; }
     const kind=extensionKind(node,source.slice(start,end));
+    if(kind&&['paragraph','heading'].includes(node.type)){
+      const extra=projectExtended(node,source,position,definitions);
+      if(extra){
+        const {doc,size,...mapping}=extra;
+        regions.push({kind,start,end,index:content.length,position});
+        extended.push({...mapping,index:content.length});blocks.push(null);content.push(doc);
+        position+=size;previousEnd=end;continue;
+      }
+    }
     if(kind){
       const preview=semanticPreview(node,definitions,source);
       if(preview){appendPreview(preview,kind,start,end);previousEnd=end;continue;}

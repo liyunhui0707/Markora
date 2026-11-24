@@ -49,6 +49,8 @@ async function render(element,isCurrent){
   if(!isCurrent())return;
   const error=document.createElement('small');error.textContent='预览不可用，可编辑此处源码。';
   const code=document.createElement('code');code.textContent=source;element.replaceChildren(error,code);
+ }finally{
+  if(isCurrent())element.dispatchEvent(new Event('markora-preview-rendered',{bubbles:true}));
  }
 }
 export function renderExtensions(root,isCurrent=()=>true){

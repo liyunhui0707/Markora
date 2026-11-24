@@ -2,27 +2,32 @@ import { TextSelection } from '@tiptap/pm/state';
 import { mapFormatEdit } from './document-format-edit.mjs';
 
 // Intercept only native caret input whose DOM selection and advertised input
-// target both agree with the current ProseMirror paragraph end.
+// target both agree with the current ProseMirror text position.
 export function applyInlineTyping(view,event,{state,blocked}){
+  const backward=event.inputType==='deleteContentBackward';
   if(blocked||!state||!event.isTrusted||event.defaultPrevented||!event.cancelable
-      ||event.inputType!=='insertText'||!event.data||event.isComposing||view.composing||event.keyCode===229
+      ||(!backward&&(event.inputType!=='insertText'||!event.data))||event.isComposing||view.composing||event.keyCode===229
       ||!view.editable||!view.hasFocus()||state.confirmed.readOnly||state.composing||state.compositionInvalid
       ||state.historyPending||state.locked||state.recoveryRecords.length)return false;
   const {selection,storedMarks}=view.state, pos=selection.$from;
-  if(!(selection instanceof TextSelection)||!selection.empty||pos.depth!==1
-      ||pos.parent.type.name!=='paragraph'||pos.parentOffset!==pos.parent.content.size)return false;
-  const closing=/^[*_~`)]$/.test(event.data);
+  if(!(selection instanceof TextSelection)||!selection.empty||!['paragraph','heading'].includes(pos.parent.type.name))return false;
+  const closing=!backward&&/^[*_~`)]$/.test(event.data);
   const continued=storedMarks?.length===0&&pos.nodeBefore?.marks.length>0;
-  if(!closing&&!continued)return false;
+  const left=pos.nodeBefore;
+  const link=left?.marks.some(m=>m.type.name==='link');
+  const context=left?.isText&&/[@.:/]/.test(left.text.slice(-256))?
+    pos.parent.textBetween(Math.max(0,pos.parentOffset-256),pos.parentOffset,' ',' '):'';
+  const autolink=link||(!backward&&context&&/(?:https?:\/\/|www\.|[^\s@]+@[^\s@]+\.)[^\s]*$/i.test(context));
+  if(!closing&&!continued&&!autolink)return false;
   const dom=view.dom.ownerDocument.getSelection(),ranges=event.getTargetRanges?.();
   if(!dom?.isCollapsed||dom.rangeCount!==1||ranges?.length!==1)return false;
   const target=ranges[0];
-  if(!view.dom.contains(dom.anchorNode)||dom.anchorNode!==target.startContainer||dom.anchorOffset!==target.startOffset
-      ||target.endContainer!==target.startContainer||target.endOffset!==target.startOffset
+  if(!view.dom.contains(dom.anchorNode)||dom.anchorNode!==target.endContainer||dom.anchorOffset!==target.endOffset
+      ||target.endContainer!==target.startContainer||(backward?target.endOffset-target.startOffset!==1:target.endOffset!==target.startOffset)
       ||view.posAtDOM(dom.anchorNode,dom.anchorOffset)!==selection.from)return false;
-  const command={action:closing?'inline-close':'inline-after',from:selection.from,to:selection.to,insert:event.data};
+  const command={action:closing?'inline-close':autolink?'autolink-input':'inline-after',from:selection.from,to:selection.to,insert:backward?'':event.data};
   let plan=mapFormatEdit(state.source,command);
-  if(!plan.ok&&closing&&continued){command.action='inline-after';plan=mapFormatEdit(state.source,command);}
+  if(!plan.ok&&!backward&&continued){command.action='inline-after';plan=mapFormatEdit(state.source,command);}
   if(!plan.ok)return false;
   const doc=view.state.schema.nodeFromJSON(plan.projection.doc);
   const tr=view.state.tr.replaceWith(0,view.state.doc.content.size,doc.content);

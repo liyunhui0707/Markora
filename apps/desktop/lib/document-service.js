@@ -1,5 +1,5 @@
 'use strict';
-const {MAX_DOCUMENT_BYTES} = require('./document-capacity');
+const {MAX_DOCUMENT_BYTES,MAX_SOURCE_UNITS} = require('./document-capacity');
 const path=require('node:path');
 const { createHash, randomUUID } = require('node:crypto');
 const { createDocumentModel } = require('./document-model');
@@ -43,6 +43,7 @@ function createDocumentService(options = {}) {
       pending: false, unverified: false, lastCode: null, syntheticTemporary: options.syntheticTemporary === true, copy: null });
     if (!document.encoding) return { ok: false, status: 'blocked', code: 'unsupported-encoding', document };
     if (options.parse !== undefined) {
+      if(document.text.length>MAX_SOURCE_UNITS)return {ok:false,status:'blocked',code:'unsupported-length',document};
       const parsed = document.parse(options.parse);
       if (!parsed.ok) return { ...parsed, document };
     }

@@ -48,3 +48,19 @@ test('official CommonMark and GFM examples produce valid editor trees and checke
    assert.deepEqual(diffs.filter(row=>row[0]===suite).map(row=>row[1]),Object.values(cases).flat().sort((a,b)=>a-b),suite);
  }
 });
+
+test('reviewed divergences retain their exact product tree, including attributes and code whitespace',()=>{
+ const snapshots=readFileSync(new URL('reviewed-projections.jsonl',fixtures),'utf8').trimEnd().split('\n').map(JSON.parse);
+ const differences=JSON.parse(readFileSync(new URL('differences.json',fixtures)));
+ for(const [suite,groups] of Object.entries(differences)){
+   const cases=readFileSync(new URL(suite+'.jsonl',fixtures),'utf8').trimEnd().split('\n').map(JSON.parse);
+   const reviewed=new Set();
+   for(const [name,number,expected] of snapshots){
+     if(name!==suite)continue;
+     assert(!reviewed.has(number));reviewed.add(number);
+     assert.deepEqual(projectSource(cases[number-1][0]).doc,expected,suite+' #'+number);
+   }
+   for(const number of Object.values(groups).flat())assert(reviewed.has(number),suite+' #'+number);
+ }
+ assert.equal(snapshots.length,213);
+});

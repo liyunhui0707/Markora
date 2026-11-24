@@ -100,7 +100,7 @@ function createDocumentSessions({ service, projectSource, mapTextEdit, mapFormat
       if (opened.document) service.close(opened.document);
       const code = ['ENOENT', 'ENOTDIR'].includes(opened.code) ? 'file-unavailable'
         : ['EACCES', 'EPERM'].includes(opened.code) ? 'read-failed'
-        : ['unsupported-path', 'unsupported-file', 'unsupported-size', 'unsupported-encoding', 'parse-failed', 'external-change','onedrive-file-not-local'].includes(opened.code) ? opened.code : 'open-failed';
+        : ['unsupported-path', 'unsupported-file', 'unsupported-size', 'unsupported-length', 'unsupported-encoding', 'parse-failed', 'external-change','onedrive-file-not-local'].includes(opened.code) ? opened.code : 'open-failed';
       return failure(code);
     }
     try {

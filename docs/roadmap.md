@@ -1,5 +1,9 @@
 # Project Roadmap — Markora
 
+## Markdown authoring · 0.86.0
+
+MD-07 covers partial and complete addresses, MD-08 covers contextual typing, inline previews and navigation, and MD-09 pins known specification divergences and writing regressions. See the [format matrix](markdown-compatibility.md).
+
 ## Markdown authoring · 0.85.0
 
 MD-04 through MD-06 add typed inline delimiters, rectangular paste, quoted list item editing, exact preview navigation and byte-level reopen tests. MD-01 through MD-03 provide the reading baseline, direct source-preserving writing, and offline extension previews. See the [format matrix and acceptance boundaries](markdown-compatibility.md).

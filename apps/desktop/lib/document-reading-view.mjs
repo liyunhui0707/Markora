@@ -8,13 +8,23 @@ export function changeReading(current, name, value) {
 }
 export function documentHeadings(doc) {
   const headings = [];
-  // Match the current source projection: only top-level rendered heading nodes.
-  // Fenced code, opaque syntax and nested structures never become outline entries.
-  doc?.forEach((node, position) => {
-    if(node.type.name==='documentPreview' && /^h[1-6]$/.test(node.attrs.tree?.tag))
-      headings.push({position,level:Number(node.attrs.tree.tag[1]),title:previewTextRuns(node.attrs.tree).join(' ')||'无标题',preview:true});
-    if (node.type.name === 'heading' && Number.isInteger(node.attrs.level) && node.attrs.level >= 1 && node.attrs.level <= 6)
-      headings.push({ position, level: node.attrs.level, title: node.textContent || '无标题' });
+  doc?.descendants((node,position)=>{
+    if(node.type.name==='documentPreview'){
+      let ordinal=0;
+      function visit(tree){
+        if(!tree||typeof tree==='string')return;
+        if(/^h[1-6]$/.test(tree.tag)){
+          headings.push({position,level:Number(tree.tag[1]),title:previewTextRuns(tree).join(' ')||'无标题',
+            preview:true,ordinal:ordinal++});
+        }else for(const child of tree.children)visit(child);
+      }
+      visit(node.attrs.tree);return false;
+    }
+    if(node.type.name==='heading'){
+      const title=node.content.content.map(n=>n.isText?n.text:n.attrs.tree?previewTextRuns(n.attrs.tree).join(' '):'').join('');
+      headings.push({position,level:node.attrs.level,title:title||'无标题'});
+    }
+    return !node.isTextblock;
   });
   return headings;
 }
@@ -100,7 +110,7 @@ export function createReadingView({ byId, context }) {
     const { editor, state } = context();
     if (!navigable() || doc.querySelector('dialog[open]') || state.confirmed.sessionId !== mappedSession || editor.state.doc !== mappedDoc) return null;
     const block = editor.view.nodeDOM(item.position);
-    const node = item.preview ? block?.querySelector('h'+item.level) : block;
+    const node = item.preview ? block?.querySelectorAll('h1,h2,h3,h4,h5,h6')[item.ordinal] : block;
     return node?.nodeName === 'H' + item.level && editor.view.dom.contains(node) ? node : null;
   }
   function jump(item) {

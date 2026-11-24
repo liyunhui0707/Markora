@@ -84,3 +84,20 @@ test('multiline code and literal pipe insertion retain fence, indentation, and t
  const r=mapTextEdit(raw,{from:leaf.to,to:leaf.to,insert:'|c'});
  assert(r.ok);assert.equal(r.source,raw.replace('b | keep','b\\|c | keep'));
 });
+
+test('ordinary prose beside an inline extension remains exactly editable',()=>{
+ for(const raw of ['前文 $x$ 尾文','前文 [[#章|位置]] 尾文','前文 [^n] 尾文\n\n[^n]: 注','前文 <span>字</span> 尾文']){
+  const p=projectSource(raw),doc=schema.nodeFromJSON(p.doc);doc.check();
+  assert.equal(doc.firstChild.type.name,'paragraph',raw);
+  for(const word of ['前文','尾文']){
+   const hit=findDocumentText(doc,word).matches[0];
+   const plan=mapTextEdit(raw,{from:hit.from,to:hit.to,insert:'修订'});
+   assert.ok(plan.ok);assert.equal(plan.source,raw.replace(word,'修订'));
+  }
+ }
+});
+test('outline includes nested rendered headings with real PM positions',()=>{
+ const doc=schema.nodeFromJSON(projectSource('顶层\n====\n\n> ## 内标题').doc);
+ const outline=documentHeadings(doc);assert.deepEqual(outline.map(h=>h.title),['顶层','内标题']);
+ assert.equal(doc.nodeAt(outline[1].position).type.name,'heading');
+});

@@ -1,5 +1,6 @@
 // Fallback for parser-owned text in structures outside the ordinary fast planners.
 // Every editable boundary is derived from the source and checked against the AST.
+import {extensionTree} from './document-extension-preview.mjs';
 import {decodeString} from 'micromark-util-decode-string';
 import {copyEditedBlock} from './document-edit-projection.mjs';
 import {equalCanonicalProjection} from './document-canonical-equal.mjs';
@@ -32,6 +33,30 @@ export function projectExtended(node,source,position,definitions){
   function inline(n,marks,path){
     if(!n.position)return null;
     const a=n.position.start.offset,b=n.position.end.offset,raw=source.slice(a,b);
+    function atom(kind,tree){
+      pos++;
+      return {type:'inlineDocumentPreview',attrs:{kind,tree},...(marks.length?{marks}:{})};
+    }
+    if(n.type==='inlineMath'||n.type==='footnoteReference')
+      return [atom(n.type,extensionTree(n,null,0,source))];
+    if(n.type==='html')return [atom('html',{tag:'code',children:[raw]})];
+    if(n.type==='text'&&raw.includes('[[')){
+      const wiki=extensionTree(n,null,0,source);
+      if(wiki){
+        const result=[];let cursor=a;
+        for(const part of wiki.children){
+          if(typeof part==='string'){
+            result.push(...text(part,{start:cursor},marks,[...path.slice(0,-1),path.at(-1)+result.length]));
+            cursor+=part.length;
+          }else{
+            const close=source.indexOf(']]',cursor+2);
+            if(close<cursor||close+2>b)return null;
+            result.push(atom('wiki',part));cursor=close+2;
+          }
+        }
+        return result;
+      }
+    }
     if(n.type==='text'){
       const value=n.value.replace(/\r\n?|\n/g,' ');
       return text(value,decodedOffsets(raw,value,a),marks,path);

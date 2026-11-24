@@ -55,3 +55,48 @@ test('delimiters cannot cross a selected range, an opaque block or the capacity 
   assert.equal(mapFormatEdit('<pre>*abc</pre>',command).ok,false);
   assert.equal(mapFormatEdit('*abc'+' '.repeat(524284),command).ok,false);
 });
+
+test('open partial www and type inline addresses through every intermediate spelling',()=>{
+  assert.deepEqual(projectSource('www.').doc.content[0].content,[{type:'text',text:'www.'}]);
+  for(const raw of ['www.example.com','https://example.com','a@example.com','[说明](https://example.com)']){
+    let source='',caret=1;
+    for(const insert of raw){
+      const change={from:caret,to:caret,insert};
+      const plan=[()=>mapFormatEdit(source,{action:'inline-close',...change}),
+        ()=>mapFormatEdit(source,{action:'autolink-input',...change}),()=>mapTextEdit(source,change)]
+        .map(run=>run()).find(result=>result.ok);
+      assert.ok(plan,source+' + '+insert);assert.equal(plan.source,source+insert);
+      source=plan.source;caret=plan.selection?.to??caret+insert.length;
+    }
+    assert.equal(projectSource(source).doc.content[0].content[0].marks[0].type,'link');
+  }
+  const back=mapFormatEdit('https://e',{action:'autolink-input',from:10,to:10,insert:''});
+  assert.ok(back.ok);assert.equal(back.source,'https://');
+});
+
+test('close formatting before a suffix in headings, lists, quotes and prose',()=>{
+ for(const prefix of ['','# ','- ','> ']){
+  for(const [pending,insert,mark] of [['**题*','*','bold'],['*题','*','italic'],['~~题~','~','strike'],['`题','`','code'],['[题](n.md',')','link']]){
+   const source=prefix+'前 '+pending+' 后';
+   const p=projectSource(source),end=p.spans.find(s=>s.text.includes(' 后'))??p.extended?.[0]?.leaves.at(-1);
+   const caret=end.to-2;
+   const plan=mapFormatEdit(source,{action:'inline-close',from:caret,to:caret,insert});
+   assert.ok(plan.ok,source);assert.equal(plan.source,prefix+'前 '+pending+insert+' 后');
+   assert.ok(JSON.stringify(plan.projection.doc).includes('"type":"'+mark+'"'));
+  }
+ }
+});
+
+test('every URL prefix beside Unicode and CRLF can reopen and each accepted step has an exact inverse',()=>{
+ for(const token of ['https://example.test/路径','www.example.com','a@example.test','[说明](https://example.test)']){
+  for(let i=0;i<=token.length;i++){
+   const base='## 文档\r\n\r\n组合 e\u0301 👩‍💻 '+token.slice(0,i);
+   const p=projectSource(base),last=p.doc.content.at(-1);
+   assert.equal(last.type,'paragraph');if(i===token.length)continue;
+   const caret=(p.blocks.at(-1)??p.extended.at(-1)).to-1, change={from:caret,to:caret,insert:token[i]};
+   const plans=[mapFormatEdit(base,{action:'inline-close',...change}),mapFormatEdit(base,{action:'autolink-input',...change}),mapTextEdit(base,change)];
+   const plan=plans.find(p=>p.ok);assert.ok(plan,base);assert.equal(plan.source,base+change.insert);
+   const undo=plan.inverseSource??{from:plan.change.from,to:plan.change.from+plan.change.insert.length,insert:base.slice(plan.change.from,plan.change.to)};assert.equal(plan.source.slice(0,undo.from)+undo.insert+plan.source.slice(undo.to),base);
+  }
+ }
+});
