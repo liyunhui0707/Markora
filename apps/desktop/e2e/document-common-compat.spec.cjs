@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy,closeDocumentApp}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -34,17 +35,17 @@ test('common Markdown compatibility: combined marks, soft lines, continuation, r
   await launch();await page.locator('#empty-open').click();await page.locator('#edit-copy').click();
   const before=page.locator('#editor .tiptap > p').filter({hasText:'Before'});
   await select(before,'both');await page.keyboard.insertText('中文😀');expected=expected.replace('*both*','*中文😀*');await check();
-  await page.locator('#format-undo').click();expected=source;await check();await page.locator('#format-redo').click();expected=source.replace('*both*','*中文😀*');await check();
-  await select(before,'bold');await page.locator('#format-italic').click();expected=expected.replace('**bold ','**_bold_ ');await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();await clickWorkspaceControl(page,'format-redo');expected=source.replace('*both*','*中文😀*');await check();
+  await select(before,'bold');await clickWorkspaceControl(page,'format-italic');expected=expected.replace('**bold ','**_bold_ ');await check();
   const soft=page.locator('#editor .tiptap > p').filter({hasText:'Soft first'});
   await select(soft,'first second 中文');await page.keyboard.insertText('接续');expected=expected.replace('first\r\nsecond 中文','接续');await check();
   await select(page.locator('#editor .tiptap > p').filter({hasText:'Soft 接续'}),'Soft',2);await page.keyboard.press('Enter');expected=expected.replace('Soft 接续','So\n\nft 接续');await check();
   const item=page.locator('#editor li p').filter({hasText:'task both tail'});await select(item,'both',2);await page.keyboard.press('Enter');expected=expected.replace('- [ ] **task *both* tail**','- [ ] **task *bo***\n- [ ] ***th* tail**');await check();
   await page.keyboard.insertText('续');expected=expected.replace('***th* tail**','***续th* tail**');await check();
-  await page.locator('#show-document-find').click();await page.locator('#find-query').fill('续th tail');await page.locator('#find-replacement').fill('任务');await page.locator('#find-replace-all').click();
+  await clickWorkspaceControl(page,'show-document-find');await page.locator('#find-query').fill('续th tail');await page.locator('#find-replacement').fill('任务');await page.locator('#find-replace-all').click();
   const undo=expected;expected=expected.replace('***续th* tail**','***任务***');await check();await expect(page.locator('#find-replace-status')).toHaveText('已替换 1 处，可撤销。');await page.keyboard.press('Escape');
-  await page.locator('#format-undo').click();expected=undo;await check();await page.locator('#format-redo').click();expected=undo.replace('***续th* tail**','***任务***');await check();
-  await page.locator('#show-source').click();await expect(page.locator('#source-editor .cm-content')).toBeVisible();await page.keyboard.press('Escape');await check();
+  await clickWorkspaceControl(page,'format-undo');expected=undo;await check();await clickWorkspaceControl(page,'format-redo');expected=undo.replace('***续th* tail**','***任务***');await check();
+  await clickWorkspaceControl(page,'show-source');await expect(page.locator('#source-editor .cm-content')).toBeVisible();await page.keyboard.press('Escape');await check();
   await expect.poll(async()=>{const s=await snap();return s?.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);const saved=await snap();
   await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});dialog.showMessageBox=async()=>({response:1});},target);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);

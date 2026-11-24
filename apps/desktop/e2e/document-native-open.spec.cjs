@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const { test, expect, _electron } = require('@playwright/test');
 const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os');
 const { createHash } = require('node:crypto');
@@ -37,8 +38,8 @@ test('Finder event workflow: cold start, warm opens, draft/history isolation, co
     await emit(second); await expect(p.locator('#document-name')).toHaveText('Second.md'); await expect(p.locator('#documents option')).toHaveCount(3);
     await p.locator('[data-session-id="'+draft.sessionId+'"]').click(); await expect(p.locator('#document-name')).toHaveText(draft.label);
     expect((await snapshot(p)).source).toBe(edited.source);
-    await p.locator('#format-undo').click(); await expect.poll(async () => (await snapshot(p)).source).toBe(first.source);
-    await p.locator('#format-redo').click(); await expect.poll(async () => (await snapshot(p)).source).toBe(edited.source);
+    await clickWorkspaceControl(p,'format-undo'); await expect.poll(async () => (await snapshot(p)).source).toBe(first.source);
+    await clickWorkspaceControl(p,'format-redo'); await expect.poll(async () => (await snapshot(p)).source).toBe(edited.source);
     // Controlled browser composition events test the switching fence, not native IME acceptance.
     await paragraph.dispatchEvent('compositionstart', { data: '' });
     await emit(original); await expect(p.locator('#native-open-panel')).toBeVisible();
@@ -48,7 +49,7 @@ test('Finder event workflow: cold start, warm opens, draft/history isolation, co
     await p.locator('#native-open-next').click(); await expect(p.locator('#document-name')).toHaveText(path.basename(original));
     await expect(p.locator('#documents option')).toHaveCount(3);
     // Do not interrupt an explicit modal or silently forget the Finder request.
-    await p.locator('#show-details').click(); await emit(second);
+    await clickWorkspaceControl(p,'show-details'); await emit(second);
     await expect(p.locator('#native-open-next')).toBeDisabled(); await p.keyboard.press('Escape');
     await expect(p.locator('#native-open-next')).toBeEnabled(); await p.locator('#native-open-next').click();
     await expect(p.locator('#document-name')).toHaveText('Second.md');

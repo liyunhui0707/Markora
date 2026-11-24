@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {focusNativeWindow,settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -40,30 +41,30 @@ test('rich table workflow: formatting, links, paste, row operations, source, sav
  try{
   await launch();await page.locator('#empty-open').click();await check();await expect(page.locator('#editor .tiptap table')).toBeVisible();
   const word=page.locator('#editor .tiptap td p').filter({hasText:'Before '});
-  await select(word,'word');await expect(page.locator('#format-italic')).toBeEnabled();await page.locator('#format-italic').click();
+  await select(word,'word');await expect(page.locator('#format-italic')).toBeEnabled();await clickWorkspaceControl(page,'format-italic');
   expected=expected.replace('**word**','**_word_**');await check();
   await select(word,'word');await page.keyboard.insertText('中文😀');expected=expected.replace('_word_','_中文😀_');await check();
-  const changed=expected;await page.locator('#format-undo').click();expected=expected.replace('_中文😀_','_word_');await check();await page.locator('#format-redo').click();expected=changed;await check();
+  const changed=expected;await clickWorkspaceControl(page,'format-undo');expected=expected.replace('_中文😀_','_word_');await check();await clickWorkspaceControl(page,'format-redo');expected=changed;await check();
   await select(word,'中文😀 plain tail');await word.evaluate(node=>{
    const event=new Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{files:[],types:['text/plain','text/html'],getData:type=>type==='text/plain'?'粘贴文字':(() => {throw Error('clipboard HTML read');})()}});node.dispatchEvent(event);
   });expected=expected.replace('**_中文😀_** plain *tail*','**_粘贴文字_**');await check();
-  const linked=page.locator('#editor .tiptap td p').filter({hasText:'link plain'});await select(linked,'link',1);await page.locator('#format-link').click();
+  const linked=page.locator('#editor .tiptap td p').filter({hasText:'link plain'});await select(linked,'link',1);await clickWorkspaceControl(page,'format-link');
   await expect(page.locator('#link-label')).toHaveValue('link plain');await expect(page.locator('#link-label')).toHaveAttribute('readonly','');
   await page.locator('#link-href').fill('https://new.invalid/table');await page.locator('#link-apply').click();
   expected=expected.replace('https://old.invalid','<https://new.invalid/table>');await check();
-  await select(linked,'link',1);await page.locator('#format-link').click();await page.locator('#link-remove').click();
+  await select(linked,'link',1);await clickWorkspaceControl(page,'format-link');await page.locator('#link-remove').click();
   expected=expected.replace('[**`link`** plain](<https://new.invalid/table> "keep")','**`link`** plain');await check();
-  await page.locator('#format-undo').click();expected=expected.replace('**`link`** plain |','[**`link`** plain](<https://new.invalid/table> "keep") |');await check();
-  const other=page.locator('#editor .tiptap td p').filter({hasText:'Other'});await select(other,'Other');await page.locator('#format-link').click();
+  await clickWorkspaceControl(page,'format-undo');expected=expected.replace('**`link`** plain |','[**`link`** plain](<https://new.invalid/table> "keep") |');await check();
+  const other=page.locator('#editor .tiptap td p').filter({hasText:'Other'});await select(other,'Other');await clickWorkspaceControl(page,'format-link');
   await expect(page.locator('#link-label')).not.toHaveAttribute('readonly');await page.locator('#link-href').fill('#table');await page.locator('#link-apply').click();expected=expected.replace(' Other |',' [Other](<#table>) |');await check();
   await select(other,'Other',1);await page.locator('#table-add-row').click();
   const beforeRow=expected;expected=expected.replace('| `code` | [Other](<#table>) |','| `code` | [Other](<#table>) |'+nl+'|||');await check();
   await page.locator('#table-delete-row').click();expected=beforeRow;await check();
   await select(linked,'link',1);const beforeColumn=expected;await page.locator('#table-add-column').click();
   expected=expected.replace('| **Name** | *Status* |','| **Name** | *Status* ||').replace('| :--- | ---: |','| :--- | ---: |---|').replace(' "keep") |',' "keep") ||').replace(' [Other](<#table>) |',' [Other](<#table>) ||');await check();
-  await page.screenshot({path:info.outputPath('rich-table-controls.png')});await page.locator('#format-undo').click();expected=beforeColumn;await check();
+  await page.screenshot({path:info.outputPath('rich-table-controls.png')});await clickWorkspaceControl(page,'format-undo');expected=beforeColumn;await check();
   expect(await page.locator('#editor .tiptap a[href]').count()).toBe(0);
-  await page.locator('#show-source').click();await expect(page.locator('#source-editor .cm-content')).toContainText('[**`link`** plain](<https://new.invalid/table> "keep")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
+  await clickWorkspaceControl(page,'show-source');await expect(page.locator('#source-editor .cm-content')).toContainText('[**`link`** plain](<https://new.invalid/table> "keep")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
   await page.locator('#save-original').click();await expect.poll(async()=>(await snap())?.dirty).toBe(false);expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);expect(await fs.readFile(target,'utf8')).toBe('\ufeff'+expected);await backup();const saved=await snap(),id=await page.evaluate(async label=>(await window.documentDemo.listDrafts()).drafts.find(d=>d.label===label).id,saved.label);
   await page.screenshot({path:info.outputPath('rich-tables.png')});await stop();await launch();await page.locator('#show-drafts').click();await page.locator(`[data-draft-id="${id}"]`).getByRole('button',{name:'恢复副本'}).click();await check();expect((await snap()).originalSave).toBeNull();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);expect(errors).toEqual([]);expect(network).toEqual([]);passed=true;

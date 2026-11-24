@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const { test, expect, _electron: electron } = require('@playwright/test');
 const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os');
@@ -75,8 +76,8 @@ test('draft name survives recovery and suggests export name without changing fil
     let named = await current(page); expect(named.label).toBe('日常写作');
     for (const key of ['source', 'revision', 'canUndo', 'canRedo', 'dirty']) expect(named[key]).toEqual(before[key]);
     await expect(page.locator('#document-name')).toHaveText('日常写作');
-    await page.locator('#format-undo').click(); await expect.poll(async () => (await current(page)).source).not.toContain('Continued.');
-    await page.locator('#format-redo').click(); await expect.poll(async () => (await current(page)).source).toBe(before.source);
+    await clickWorkspaceControl(page,'format-undo'); await expect.poll(async () => (await current(page)).source).not.toContain('Continued.');
+    await clickWorkspaceControl(page,'format-redo'); await expect.poll(async () => (await current(page)).source).toBe(before.source);
     await exportFile(page); await expect.poll(async () => (await current(page)).copyState?.state).toBe('created-confirmed');
     const exported = await fs.readFile(target), receipt = (await current(page)).copyState;
     expect(exported).toEqual(Buffer.from('\ufeff' + before.source));

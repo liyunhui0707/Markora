@@ -1242,7 +1242,7 @@ test('structured code supports literal Enter Tab multiline paste and composition
   at=h.state().selection.from;assert(h.edit(at,at,'Tail'));await h.controller.idle();assert(h.document.text.endsWith('\n\nTail'));assert.deepEqual(fs.readFileSync(h.file),h.disk);
 });
 test('structured code rejects fence escape and forged opaque edit, then permits continued text',async()=>{
-  const h=harness('```js\nA\n```\n\n```js meta\nProtected\n```');const s=h.span('A');
+  const h=harness('```js\nA\n```\n\n<aside>Protected</aside>');const s=h.span('A');
   assert.equal(h.edit(s.from,s.to,'A\n```\nEscaped'),false);assert.equal(h.document.text,h.disk.toString());
   const doc=h.state().doc;let opaque;doc.descendants((n,p)=>{if(n.type.name==='codeBlock'&&!n.attrs.sourceEditable)opaque=p;});
   assert.equal(h.controller.prepare(h.state().tr.setNodeMarkup(opaque,null,{language:'js',sourceEditable:true})),false);

@@ -1,5 +1,24 @@
 # Stage History
 
+## MD-04 → MD-06 · 0.85.0 Markdown authoring
+
+Development builds on the 0.84.0 source. The 0.84.0 archive still matches its recorded SHA-256. The daily installation was independently identified as 0.83.0.
+
+- MD-04 adds paragraph-end inline delimiter commands through the existing revision queue and main-owned format history.
+- MD-05 adds a bounded rectangular paste into ordinary table cells, split/join of explicitly quoted plain list items, and text-range navigation for repeated search hits in a read-only preview.
+- MD-06 adds a controlled Electron regression for read-only and writable opens, per-key input, undo/redo and byte-level save/reopen of a BOM/CRLF document containing a ragged table. It also specifies how a blank line after a leading horizontal rule distinguishes prose from metadata.
+
+Local validation passed the 3,736-test baseline (two opt-in checks excluded), real Electron format workflows, six unpaced 480,929-unit writing cycles with restart, synthetic cross-volume recovery, and packaged offline math and diagram startup. Genuine IME, VoiceOver and sustained human writing remain untested for this build.
+
+## MD-01 → MD-03 · Markdown development candidate 0.84.0 (2026-11-24)
+
+- MD-01 adds offline CommonMark and GFM example suites, width-correct GFM preview tables, searchable preview text and heading navigation.
+- MD-02 maps extended, decoded inline text and code to original source boundaries. Editing, replacement and supported paragraph splits compare the complete resulting projection and retain exact inverses.
+- MD-03 renders local MathML and Mermaid images, note and heading navigation, alerts and metadata. Block source changes rejoin their confirmed document through the existing Apply path. Raw HTML remains inert.
+- Local acceptance covered 3,728 passing baseline tests and the two opt-in performance checks in a separate run. Sixteen Electron format and keyboard workflows passed. Unpaced typing completed six cycles on a 480,929-unit document and continued after restart. Additional checks covered cross-volume APFS saving, offline recovery and reconnect.
+- The arm64 ad-hoc candidate ZIP has SHA-256 `cc1972ad606d16de23c0ba9955c982c7a4e08368b798ff4b54366ded65b6a6c0`. The packaged App rendered offline math and a decoded Mermaid image under a temporary profile and exited normally. Physical IME and VoiceOver remain untested this round.
+- Coverage, intentional dialect differences and human acceptance scope are listed in the [compatibility matrix](markdown-compatibility.md).
+
 ## Document workflow consolidation — 0.81.0 (2026-11-17)
 
 - Save opens one destination panel for an unbound draft; Save As binds the new

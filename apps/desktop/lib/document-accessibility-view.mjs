@@ -51,12 +51,13 @@ export function createAccessibilityView({byId,context}) {
       return;
     }
     if(event.key==='F10'&&event.altKey&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey){
+      if(!visible(byId('format-inline-tools')) && !byId('format-toolbar').hidden)byId('show-format-tools').click();
       if(visible(byId('format-inline-tools'))){event.preventDefault();bars[0].focus();}return;
     }
     if(event.key==='F6'&&!event.metaKey&&!event.ctrlKey&&!event.altKey){
       const editor=context().editor;
-      const groups=[['document-sidebar',byId('session-filter')],['document-header',byId('toggle-session-sidebar')],
-        ['writing-toolbar',visible(byId('format-block'))?byId('format-block'):byId('show-reading-settings')],
+      const groups=[['document-sidebar',visible(byId('session-filter'))?byId('session-filter'):byId('new-temporary')],['document-header',byId('toggle-session-sidebar')],
+        ['writing-toolbar',byId('format-block')],
         ['document-scroll',editor?.view.dom||byId('empty-new')],['document-outline',byId('outline-filter')]]
         .filter(([,target])=>visible(target));
       if(!groups.length)return;

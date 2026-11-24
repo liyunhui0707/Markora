@@ -1,3 +1,7 @@
+import {includeProtocolPrefixes} from './document-protocol-links.mjs';
+import remarkMath from './document-math-delimiters.mjs';
+import {extensionKind,metadataPreview} from './document-extension-preview.mjs';
+import {projectExtended,mapExtendedText} from './document-extended-source.mjs';
 import {equalProjection} from './document-projection-equal.mjs';
 import {semanticPreview} from './document-semantic-preview.mjs';
 import {mapBoundarySpace,ordinarySpaceChangesEmphasis} from './document-boundary-space.mjs';
@@ -29,8 +33,8 @@ export const spanBlock = (projection, span) => span.containerPath?containerNodeA
   : listNodeAt(projection.doc.content[span.blockIndex],span.itemPath??[span.itemIndex]).content[0];
 
 // Deliberately restricted projection; NOT a serializer. Offsets are UTF-16.
-const parser = unified().use(remarkParse).use(remarkGfm);
-const parse = createSourceParser(source => parser.parse(source));
+const parser = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
+const parse = createSourceParser(source => includeProtocolPrefixes(parser.parse(source),source));
 const unsafe = () => ({ ok: false, code: 'unsafe-source-range' });
 const validText = s => typeof s === 'string' && !/[\0\r\n]/.test(s)
   && s.isWellFormed();
@@ -38,7 +42,11 @@ const splits = (s, n) => n > 0 && n < s.length && /[\uD800-\uDBFF]/.test(s[n - 1
 
 export function projectSource(source, spliceHint) {
   if (typeof source !== 'string' || source.length > MAX_SOURCE_UNITS) throw Error('Unsupported source');
-  const tree = parse(source,spliceHint), content = [], spans = [], blocks = [];
+  const frame=source.startsWith('---') && source.match(/^---(?:\r\n|\n|\r)([\s\S]*?)(?:\r\n|\n|\r)---(?=\r\n|\n|\r|$)/);
+  // A blank line immediately after the first rule explicitly starts prose.
+  // Permit leading YAML comments, then require a mapping key on the next line.
+  const fm=frame && /^(?:#[^\r\n]*(?:\r\n|\r|\n))*[^\s#][^\r\n]*?:(?:[ \t]|(?=\r|\n|$))/.test(frame[1]) ? frame[0].length : 0;
+  const tree = parse(fm?source.slice(0,fm).replace(/[^\r\n]/g,' ')+source.slice(fm):source,fm?undefined:spliceHint), content = [], spans = [], blocks = [], extended=[], regions=[];
   const definitions=new Map();
   const definitionNodes=[...tree.children].reverse();
   while(definitionNodes.length){const n=definitionNodes.pop();
@@ -46,8 +54,6 @@ export function projectSource(source, spliceHint) {
     if(n.children)for(let i=n.children.length-1;i>=0;i--)definitionNodes.push(n.children[i]);
   }
   const lines = text => { const tokens = text.match(/\r\n|\n|\r/g) || []; return tokens.join('') === text ? tokens : []; };
-  const fm = /^---(?:\r\n|\n|\r)/.test(source)
-    ? source.match(/^---(?:\r\n|\n|\r)[\s\S]*?(?:\r\n|\n|\r)---(?=\r\n|\n|\r|$)/)?.[0].length || 0 : 0;
   let position = 0, previousEnd = fm;
   // Nodes are visited in source order. Scan line boundaries once; two backward
   // searches per paragraph become quadratic when one newline kind is absent.
@@ -70,16 +76,26 @@ export function projectSource(source, spliceHint) {
     blocks.push({from:position,to:position+2,sourceFrom:at,sourceTo:at});
     content.push({ type: 'paragraph', content: [] }); position += 2;
   }
-  function opaque(text) {
+  function opaque(text,start) {
     if (!text) return;
+    regions.push({kind:'source',start,end:start+text.length,index:content.length,position});
     blocks.push(null);
     content.push({ type: 'codeBlock', attrs: { language: null }, content: [{ type: 'text', text }] });
     position += text.length + 2;
   }
-  if (fm) opaque(source.slice(0, fm));
+  function appendPreview(preview,kind,start,end){
+    regions.push({kind,start,end,index:content.length,position});
+    blocks.push(null);content.push(preview);position++;
+  }
+  if (fm) appendPreview({type:'documentPreview',attrs:{kind:'metadata',tree:metadataPreview(source.slice(0,fm))}},'metadata',0,fm);
   for (let node of tree.children) {
     let start = node.position.start.offset, end = node.position.end.offset;
-    if (start < fm) { if (end > fm) { opaque(source.slice(fm, end)); previousEnd = end; } continue; }
+    if (start < fm) { if (end > fm) { opaque(source.slice(fm, end),fm); previousEnd = end; } continue; }
+    const kind=extensionKind(node,source.slice(start,end));
+    if(kind){
+      const preview=semanticPreview(node,definitions,source);
+      if(preview){appendPreview(preview,kind,start,end);previousEnd=end;continue;}
+    }
     if(node.type==='definition'){previousEnd=end;continue;}
     // An empty fence prefix can sit before the original file's final newline.
     // Keep that newline outside the cursor span, as for an ordinary paragraph.
@@ -174,8 +190,13 @@ export function projectSource(source, spliceHint) {
     }
     previousEnd = end;
     if (!supported || !parts.length) {
+      const extra=projectExtended(node,source,position,definitions);
+      if(extra){
+        const {doc,size,...mapping}=extra;
+        extended.push({...mapping,index:content.length});blocks.push(null);content.push(doc);position+=size;continue;
+      }
       const preview=semanticPreview(node,definitions,source);
-      if(preview){blocks.push(null);content.push(preview);position++;}else opaque(raw);
+      if(preview){appendPreview(preview,preview.attrs.kind,start,end);}else opaque(raw,start);
       continue;
     }
     const blockIndex = content.length;
@@ -200,7 +221,7 @@ export function projectSource(source, spliceHint) {
     if (source === '' || /^(?:\r\n|\n|\r)$/.test(source)) emptyParagraph(0);
     else content.push({ type: 'paragraph', content: [] }); // Ambiguous blank-only input remains non-editable.
   }
-  return { doc: { type: 'doc', content }, spans, blocks };
+  return { doc: { type: 'doc', content }, spans, blocks, ...(extended.length?{extended}:{}), ...(regions.length?{regions}:{}) };
 }
 
 function paragraphEdit(source, projection, change, verify = true, paragraphSeparator = null) {
@@ -295,6 +316,9 @@ function mapTextEditCore(source, change, leaf, paragraphSeparator, beforeProject
   const { from, to, insert } = change;
   if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from > to || typeof insert !== 'string' || insert.length > 4096) return unsafe();
   const projection = beforeProjection();
+  if(leaf===null && paragraphSeparator===null && projection.extended){
+    const mapped=mapExtendedText(source,projection,change,projectSource);if(mapped)return mapped;
+  }
   if(leaf===null&&paragraphSeparator===null&&ordinarySpaceChangesEmphasis(source,projection,change))return unsafe();
   if(leaf===null&&paragraphSeparator===null){const container=mapContainerRange(source,projection,change,projectSource);if(container)return container;}
   if(leaf===null&&paragraphSeparator===null){const structured=mapStructuredRange(source,projection,change,projectSource);if(structured)return structured;}

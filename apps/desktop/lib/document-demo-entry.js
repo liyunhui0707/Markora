@@ -1,3 +1,4 @@
+import {blockRange,renderBlockPreview,followPreviewJump} from './document-block-workspace.mjs';
 import {dismissPassivePanels} from './document-window-panels.mjs';
 import {applyBoundarySpace} from './document-boundary-space-input.mjs';
 import {createImagePaste} from './document-image-paste.mjs';
@@ -36,7 +37,7 @@ import { createRecentView } from './document-recent-view.mjs';
 import { createDraftView } from './document-draft-view.mjs';
 import { syncNativeBackspaceSelection, syncNativeListSelection } from './document-native-selection.mjs';
 
-import { applyBlockShortcut, applyStructuredKey, applyTaskToggle } from './document-block-input.mjs';
+import { applyBlockShortcut, applyInlineTyping, applyStructuredKey, applyTaskToggle } from './document-block-input.mjs';
 import { createLinkView } from './document-link-view.mjs';
 
 const api = window.documentDemo, byId = id => document.getElementById(id);
@@ -51,10 +52,19 @@ const imagePaste=createImagePaste({api,context:()=>({controller,editor,state:con
 const imageView=createImageView({api,byId,context:()=>({controller,editor,state:controller?.state(),loading,invalid:activeInvalid()}),report:viewerStatus});
 const linkView = createLinkView({byId,context:()=>({controller,editor,state:controller?.state(),loading,invalid:activeInvalid()}),report:viewerStatus});
 const readingView = createReadingView({ byId, context: () => ({ editor, state: controller?.state(), loading, invalid: activeInvalid() }) });
-const sourceView = createSourceView({ byId, createEditor:createSourceEditor, saveFile:()=>fileIntent.run('保存',saveFile),run:(label,action)=>fileIntent.run(label,action), context: () => ({ controller, editor, state: controller?.state(), loading, invalid: activeInvalid(),
+const sourceView = createSourceView({ byId, renderPreview:(box,fragment,context)=>renderBlockPreview(box,fragment,editor.schema,context), createEditor:createSourceEditor, saveFile:()=>fileIntent.run('保存',saveFile),run:(label,action)=>fileIntent.run(label,action), context: () => ({ controller, editor, state: controller?.state(), loading, invalid: activeInvalid(),
   sourceSelection:()=>{const at=editor.state.selection.from,span=projectSource(controller.state().source).spans.find(s=>at>=s.from&&at<=s.to);return span?span.sourceFrom+at-span.from:0;},
   restoreSelection:at=>{const source=controller.state().source,span=projectSource(source).spans.find(s=>at>=s.sourceFrom&&at<=s.sourceTo);if(span)resetSource(source,{from:span.from+at-span.sourceFrom,to:span.from+at-span.sourceFrom});}
 }) });
+function openCurrentBlock(position=editor?.state.selection.from){
+  if(!editor||!controller||position==null)return false;
+  const index=editor.state.doc.resolve(position).index(0);
+  return sourceView.openRegion(blockRange(controller.state().source,index));
+}
+byId('edit-block-source').onclick=()=>{
+  byId('file-actions').open=false;
+  if(!openCurrentBlock())viewerStatus('此处无法单独打开，可使用文档源码。',true,true);
+};
 const accessibility = createAccessibilityView({byId,context:()=>({editor,state:controller?.state(),loading})});
 const writingShell = createWritingShell({ byId, reading: readingView, sourceView, context: () => ({ state: controller?.state(), loading, selected, pendingSession, unavailable: id => lifecycles.has(id),run:(label,action)=>fileIntent.run(label,action,{navigation:true}) }), refreshDrafts: () => draftView.refresh() });
 const findView = createFindView({ byId, context: () => ({ controller, editor, state: controller?.state(), loading, invalid: activeInvalid() }) });
@@ -287,8 +297,18 @@ function install(snapshot) {
     } });
     editor = new Editor({ element: byId('editor'), content: projectSource(snapshot.source).doc, enableInputRules: false, enablePasteRules: false,
       extensions: [...documentEditorExtensions((view,position)=>applyTaskToggle(view,position,{controller,loading,invalid:activeInvalid()}),imagePreviews.nodeView), gate],
-      editorProps: { attributes: { tabindex: '0' }, handleDOMEvents: {
+      editorProps: { attributes: { tabindex: '0' },
+        handleDoubleClickOn:(_view,_pos,node,nodePos,event)=>node.type.name==='documentPreview'&&!event.target.closest('button')&&openCurrentBlock(nodePos),
+        handleDOMEvents: {
+        click: (view,event)=>{
+          const button=event.target.closest?.('[data-preview-jump]');
+          if(!button)return false;
+          event.preventDefault();followPreviewJump(button,view.dom,viewerStatus);return true;
+        },
         keydown: (view, event) => {
+          if(event.key==='Enter'&&event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&openCurrentBlock()){
+            event.preventDefault();return true;
+          }
           syncNativeListSelection(view,event,{state:controller?.state(),blocked:activeInvalid()||loading||readOnlyDocument()});
           if (imageView.key(view,event)) return true;
           if (tableView.key(view,event)) return true;
@@ -319,7 +339,7 @@ function install(snapshot) {
             event.preventDefault(); return true;
           }
           const inputContext = {state:controller?.state(),blocked:activeInvalid()||loading||readOnlyDocument(),report:viewerStatus};
-          if (applyBoundarySpace(_view,event,inputContext) || insertPlainTextAtCaret(_view,event,inputContext)
+          if (applyInlineTyping(_view,event,inputContext) || applyBoundarySpace(_view,event,inputContext) || insertPlainTextAtCaret(_view,event,inputContext)
               || replaceParagraphRangeInput(_view,event,inputContext)) return true;
           if (!['historyUndo', 'historyRedo'].includes(event.inputType)) return false;
           event.preventDefault(); void history(event.inputType === 'historyUndo' ? 'undo' : 'redo'); return true;
@@ -418,7 +438,7 @@ async function finishDocumentClose(id) {
     'composition-status', 'composition-copy-panel', 'input-pressure-panel', 'recovery-panel']) byId(name).hidden = true;
   for (const name of ['source', 'recovery', 'viewer-status', 'test-copy-result', 'test-copy-summary', 'test-copy-operation',
     'linked-file-path','linked-file-status','linked-file-checked','original-save-receipt', 'draft-backup-status', 'copy-action-status', 'input-pressure-source', 'save-version-list']) byId(name).textContent = '';
-  document.body.dataset.documentState = 'empty'; document.title = 'markora'; byId('empty-state').hidden = false;
+  document.body.dataset.documentState = 'empty'; document.title = 'Markora'; byId('empty-state').hidden = false;
   for (const name of ['open-file', 'empty-open', 'new-temporary', 'documents']) byId(name).disabled = false;
   loading = false; inputPressure.sync(); nameView.sync(); formatView.sync();tableView.sync(); linkView.sync();imageView.sync(); findView.sync(); copyActionsView.render(); writingShell.sync(); recentView.sync();
   if (next) {
@@ -534,7 +554,10 @@ byId('new-temporary').onclick=()=>fileIntent.run('新建',()=>openDocument(true)
 byId('open-file').onclick=()=>fileIntent.run('打开文档',openReadOnly,{navigation:true});
 byId('empty-open').onclick=byId('open-file').onclick;
 byId('file-actions-toggle').onpointerdown=event=>{if(editor?.view.composing||controller?.state().composing)event.preventDefault();};
-byId('file-actions-toggle').onclick=event=>{event.preventDefault();return fileIntent.run('打开文档操作',()=>{byId('file-actions').open=!byId('file-actions').open;});};
+byId('file-actions-toggle').onclick = event => {
+  // Disclosure only. Each command keeps its own edit and file guards.
+  if (editor?.view.composing || controller?.state().composing) event.preventDefault();
+};
 api.onFileAction?.(action=>{
   if(closingWindow)return;
   if(action==='save')return void saveCurrent();
@@ -579,7 +602,7 @@ api.onReady(data => {
     byId('writing-actions').hidden = false; byId('new-temporary').disabled = false;
     byId('documents').hidden = true; byId('documents').setAttribute('aria-label', '切换已打开文档');
     writingShell.configure(); findView.configure(); closeView.configure(); recentView.configure(data);
-    byId('open-file').disabled = false; document.title = 'markora';
+    byId('open-file').disabled = false; document.title = 'Markora';
     nativeOpenView.configure(); accessibility.configure();
   } else byId('connect').disabled = false;
 });

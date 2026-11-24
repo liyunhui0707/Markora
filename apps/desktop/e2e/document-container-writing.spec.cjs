@@ -1,3 +1,4 @@
+const {clickWorkspaceControl, workspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {focusNativeWindow,settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -34,25 +35,25 @@ test('complex container workflow: paragraphs, nested quotes, native ranges, exac
   },{aw,ao,bw,bo,other:b===a?null:await b.textContent(),reverse});
   await expect.poll(()=>a.evaluate(n=>{const s=n.closest('.tiptap').editor.state.selection;return {from:s.from,to:s.to};})).toEqual(wanted);
  }
- async function undo(){await page.locator('#format-undo').click();expected=source;await check();}
+ async function undo(){await clickWorkspaceControl(page,'format-undo');expected=source;await check();}
  async function paste(node,text){await node.evaluate((n,text)=>{const e=new Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(e,'clipboardData',{value:{files:[],types:['text/plain','text/html'],getData:type=>type==='text/plain'?text:(()=>{throw Error('HTML read');})()}});n.dispatchEvent(e);},text);}
  try{
   await launch();await page.locator('#empty-open').click();await check();await expect.poll(async()=>{const s=await snap();return !s.readOnly&&!!s.originalSave;}).toBe(true);await expect(page.locator('#editor .tiptap > ul > li').first().locator('p')).toHaveCount(3);
   await select(para('Second '),'continued',3);await page.keyboard.insertText('新😀');expected=source.replace('continued','con新😀tinued');await check();await undo();
   await select(para('Second '),'Second',3);await page.keyboard.press('Meta+Enter');expected=source.replace('Second','Sec'+nl+nl+'  ond');await check();const splitParagraph=expected;
-  await page.locator('#format-undo').click();expected=source;await check();await page.locator('#format-redo').click();expected=splitParagraph;await check();await select(para('ond '),'ond',0);await page.keyboard.press('Backspace');expected=source;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();await clickWorkspaceControl(page,'format-redo');expected=splitParagraph;await check();await select(para('ond '),'ond',0);await page.keyboard.press('Backspace');expected=source;await check();
   await select(para('Second '),'Second',3);await page.keyboard.press('Enter');expected=source.replace('Second','Sec'+nl+nl+'- [ ] ond');await check();await select(para('ond '),'ond',0);await page.keyboard.press('Backspace');expected=source;await check();
   await page.locator('#editor .tiptap > ul > li > .document-task-toggle').first().click();expected=source.replace('[X]','[ ]');await check();await undo();
   await select(para('Before '),'quote',2);await page.keyboard.press('Enter');expected=source.replace('**quote**','**qu**'+nl+'> > '+nl+'> > **ote**');await check();await select(page.locator('#editor .tiptap p').filter({hasText:/^ote$/}),'ote',0);await page.keyboard.press('Backspace');expected=source;await check();
-  await select(para('End link'),'End',1);await page.locator('#format-block').selectOption('blockquote');expected=source.replace('> > End','> > > End');await check();await page.locator('#format-block').selectOption('paragraph');expected=source;await check();
+  await select(para('End link'),'End',1);await (await workspaceControl(page,'format-block')).selectOption('blockquote');expected=source.replace('> > End','> > > End');await check();await (await workspaceControl(page,'format-block')).selectOption('paragraph');expected=source;await check();
   await select(para('First '),'word',1,para('Second '),'label',2,true);await paste(para('First '),'One\nTwo😀');
   expected=source.replace(list,'- [X] First **w**One'+nl+nl+'  Two😀[**bel** plain](../guide.md "keep title")'+nl+'  continued'+nl+nl+'  - Child'+nl+'- Tail');await check();await undo();
   await select(para('Before '),'quote',1,para('End link'),'link',2,true);await page.keyboard.insertText('新😀');expected=source.replace('**quote**'+nl+'> > '+nl+'> > End [link](guide "keep quote")','**q新😀**[nk](guide "keep quote")');await check();await undo();
-  await select(para('Second '),'Second',0,para('Second '),'Second',6);await page.locator('#format-italic').click();expected=source.replace('Second','*Second*');await check();await undo();
+  await select(para('Second '),'Second',0,para('Second '),'Second',6);await clickWorkspaceControl(page,'format-italic');expected=source.replace('Second','*Second*');await check();await undo();
   await select(para('Second '),'continued',9);await page.keyboard.press('Meta+Enter');expected=source.replace('continued','continued'+nl+nl+'  ');await check();await page.keyboard.insertText('New paragraph');expected=expected.replace('continued'+nl+nl+'  ','continued'+nl+nl+'  New paragraph');await check();
   await page.screenshot({path:info.outputPath('containers-1280.png')});await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(920,760));await page.screenshot({path:info.outputPath('containers-920.png')});
   const visible=await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];return w.isVisible()&&!w.isMinimized();});expect(visible).toBe(true);expect(await page.locator('#editor .tiptap a[href]').count()).toBe(0);
-  await page.locator('#show-source').click();await expect(page.locator('#source-editor .cm-content')).toContainText('New paragraph');await page.keyboard.press('Escape');await check();
+  await clickWorkspaceControl(page,'show-source');await expect(page.locator('#source-editor .cm-content')).toContainText('New paragraph');await page.keyboard.press('Escape');await check();
   await expect.poll(async()=>{const s=await snap();return s?.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
   await page.locator('#save-original').click();await expect.poll(async()=>(await snap())?.dirty).toBe(false);expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);expect(await fs.readFile(target,'utf8')).toBe('\ufeff'+expected);

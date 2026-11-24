@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {focusNativeWindow,settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const {createResourceProbe}=require('./helpers/document-resource-probe.cjs');
@@ -31,15 +32,15 @@ test('image resource lifecycle: repeated references share transfers and closed s
   firstTransfers=await transfers();await sample('readonly-loaded');expect(firstTransfers.requests).toBe(1);
   await p.locator('#edit-copy').click();await expect(p.locator('#editor img.document-local-image:not([hidden])')).toHaveCount(40);await backup();
   const drafts=await p.evaluate(()=>window.documentDemo.listDrafts());expect(drafts.drafts).toHaveLength(1);const id=drafts.drafts[0].id;
-  await p.locator('#close-current-document').click();await p.locator('#close-current-document').click();await expect(p.locator('#empty-new')).toBeVisible();
+  await clickWorkspaceControl(p,'close-current-document');await clickWorkspaceControl(p,'close-current-document');await expect(p.locator('#empty-new')).toBeVisible();
   for(let cycle=0;cycle<8;cycle++){
    await p.locator('#show-drafts').click();await p.locator(`[data-draft-id="${id}"]`).getByRole('button',{name:'恢复副本'}).click();
    await expect(p.locator('#editor img.document-local-image:not([hidden])')).toHaveCount(40);expect((await snap()).source).toBe(source);
    const para=p.locator('#editor .tiptap > p').first();await para.click();await settleNativeCaret(para);await para.evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);});
    await p.keyboard.press('End');await p.keyboard.insertText(' added');await expect.poll(async()=>(await snap())?.source).toBe(source.replace('Opening paragraph.','Opening paragraph. added'));
-   await p.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source).toBe(source);await backup();
-   await p.locator('#show-source').click();await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');await sample('open-'+cycle);
-   const current=await snap();await p.locator('#close-current-document').click();await expect(p.locator('#empty-new')).toBeVisible();
+   await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap())?.source).toBe(source);await backup();
+   await clickWorkspaceControl(p,'show-source');await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');await sample('open-'+cycle);
+   const current=await snap();await clickWorkspaceControl(p,'close-current-document');await expect(p.locator('#empty-new')).toBeVisible();
    await expect(p.locator('#editor .tiptap')).toHaveCount(0);await expect(p.locator('#editor img.document-local-image')).toHaveCount(0);await expect(p.locator('#source-editor .cm-editor')).toHaveCount(0);
    expect((await p.evaluate(()=>window.documentDemo.listDrafts())).drafts.map(d=>d.id)).toEqual([id]);expect((await p.evaluate(id=>window.documentDemo.snapshot({sessionId:id}),current.sessionId)).ok).toBe(false);await sample('closed-'+cycle);
   }

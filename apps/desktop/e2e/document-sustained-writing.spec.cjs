@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {focusNativeWindow,settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const {createResourceProbe}=require('./helpers/document-resource-probe.cjs');
@@ -69,16 +70,16 @@ test('sustained writing: repeated long-document sessions preserve edits, close a
     const roundStart=Date.now();await typeConfirmed(text);added+=text;
     typed=source.slice(0,sourceEnd)+added+source.slice(sourceEnd);expect((await snap()).source).toBe(typed);
     const typingMs=Date.now()-roundStart;
-    await p.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source===typed.slice(0,sourceEnd+added.length-1)+typed.slice(sourceEnd+added.length)).toBe(true);
-    await p.locator('#format-redo').click();await expect.poll(async()=>(await snap())?.source===typed).toBe(true);rounds.push({typingMs,units:added.length});
+    await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap())?.source===typed.slice(0,sourceEnd+added.length-1)+typed.slice(sourceEnd+added.length)).toBe(true);
+    await clickWorkspaceControl(p,'format-redo');await expect.poll(async()=>(await snap())?.source===typed).toBe(true);rounds.push({typingMs,units:added.length});
     if(minutes&&Date.now()-lastSample>=60000)await progress('writing-'+cycle);
    }while(Date.now()-start<soakMs/6);
-   const typingMs=Date.now()-start;await p.locator('#show-source').click();await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');
+   const typingMs=Date.now()-start;await clickWorkspaceControl(p,'show-source');await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');
    await expect.poll(async()=>{const s=await snap();return s?.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);
    const current=await snap(),drafts=await p.evaluate(async()=>window.documentDemo.listDrafts());expect(drafts.drafts).toHaveLength(cycle+1);
    const recovery=drafts.drafts.find(d=>d.label===current.label);expect(recovery).toBeTruthy();retained.push({id:recovery.id,source:typed});
-   const open=await sample();await p.locator('#close-current-document').click();await expect(p.locator('#edit-copy')).toBeVisible();expect((await snap()).source).toBe(source);
-   await p.locator('#close-current-document').click();await expect(p.locator('#empty-open')).toBeVisible();await expect(p.locator('#documents option')).toHaveCount(0);await expect(p.locator('#editor .tiptap')).toHaveCount(0);
+   const open=await sample();await clickWorkspaceControl(p,'close-current-document');await expect(p.locator('#edit-copy')).toBeVisible();expect((await snap()).source).toBe(source);
+   await clickWorkspaceControl(p,'close-current-document');await expect(p.locator('#empty-open')).toBeVisible();await expect(p.locator('#documents option')).toHaveCount(0);await expect(p.locator('#editor .tiptap')).toHaveCount(0);
    for(const id of ['source','recovery','test-copy-result','test-copy-summary','test-copy-operation','original-save-receipt','draft-backup-status','copy-action-status','input-pressure-source','save-version-list','linked-file-path','linked-file-status','linked-file-checked'])await expect(p.locator('#'+id)).toHaveText('');
    expect((await p.evaluate(async sessionId=>window.documentDemo.snapshot({sessionId}),current.sessionId)).ok).toBe(false);
    expect((await p.evaluate(async()=>window.documentDemo.listDrafts())).drafts).toHaveLength(cycle+1);
@@ -90,7 +91,7 @@ test('sustained writing: repeated long-document sessions preserve edits, close a
   const para=p.locator('#editor .tiptap > p').first();await para.click();await settleNativeCaret(para);await para.evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));});
   await expect.poll(()=>para.evaluate(n=>n.closest('.tiptap').editor.state.selection.$from.parentOffset===n.textContent.length)).toBe(true);
   await typeConfirmed(' continued');const resumed=last.source.replace('Opening paragraph.','Opening paragraph. continued');expect((await snap()).source).toBe(resumed);
-  await p.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source===resumed.replace('continued','continue')).toBe(true);await p.locator('#format-redo').click();await expect.poll(async()=>(await snap())?.source===resumed).toBe(true);
+  await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap())?.source===resumed.replace('continued','continue')).toBe(true);await clickWorkspaceControl(p,'format-redo');await expect.poll(async()=>(await snap())?.source===resumed).toBe(true);
   evidence.restart={exact:true,continued:true,restoredHash:hash(Buffer.from(last.source)),sample:await sample()};expect(hash(await fs.readFile(original))).toBe(hash(bytes));expect(faults).toEqual([]);expect(network).toEqual([]);evidence.passed=true;
   console.log('soak-input-envelope:'+JSON.stringify({inputPacing:evidence.inputPacing,keyDelayMs:keyDelay,maxBurstUnits:evidence.maxBurstUnits,cycles:evidence.cycles.map(c=>({cycle:c.cycle,typingMs:c.typingMs,pendingPeak:c.pendingPeak,sourceSha256:c.sourceSha256})),restart:evidence.restart.exact}));
  }finally{try{await stop();}finally{await fs.writeFile(info.outputPath('evidence.json'),JSON.stringify({...evidence,elapsedMs:Date.now()-evidence.startedAt,faults,network,artifacts:'only synthetic files in the named OS temporary directories; retained'},null,2));}}

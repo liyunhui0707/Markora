@@ -2,8 +2,49 @@ import {continueInProse} from './document-prose-continuation.mjs';
 import capacity from './document-capacity.js';
 const {MAX_SOURCE_UNITS} = capacity;
 import {TABLE_ROWS,TABLE_COLUMNS,tableCell} from './document-table-source.mjs';
+import sourceEdits from './document-source-edit.js';
+import {equalCanonicalProjection} from './document-canonical-equal.mjs';
 const reject=()=>({ok:false,code:'unsafe-format-range'});
 export const tableActions=['insert-table','table-add-row','table-delete-row','table-add-column','table-delete-column','table-before','table-exit'];
+
+// A plain rectangular TSV replaces whole cells starting at the caret. Source
+// padding, pipe separators, row endings and every cell outside it stay exact.
+export function mapTablePaste(source,p,{from,to,insert},project){
+  if(!Number.isSafeInteger(from)||from!==to||typeof insert!=='string'||insert.length>4096
+      ||!insert.includes('\t')||!insert.isWellFormed()||/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u2028\u2029]/u.test(insert))return reject();
+  const rows=insert.split(/\r\n|\r|\n/).map(row=>row.split('\t')),width=rows[0].length;
+  if(width<2||width>TABLE_COLUMNS||rows.length>TABLE_ROWS||rows.some(r=>r.length!==width))return reject();
+  const index=p.blocks.findIndex(b=>b?.cells&&from>b.from&&from<b.to);
+  if(index<0)return reject();
+  const block=p.blocks[index],first=block.cells.flat().find(c=>from>=c.from&&from<=c.to);
+  if(!first||first.tableRow+rows.length>block.cells.length||first.tableCol+width>block.cells[0].length)return reject();
+  const expected=structuredClone(p.doc),patches=[];
+  for(const [r,values] of rows.entries()){
+    for(const [c,value] of values.entries()){
+      const cell=block.cells[first.tableRow+r][first.tableCol+c],old=source.slice(cell.sourceFrom,cell.sourceTo);
+      const para=expected.content[index].content[cell.tableRow].content[cell.tableCol].content[0];
+      if(para.content.some(n=>n.type!=='text'||n.marks?.length)||cell.text!==old)return reject();
+      const pad=old.match(/^ */)[0],tail=old.slice(pad.length).match(/ *$/)[0];
+      const text=pad+value+tail;
+      para.content=text?[{type:'text',text}]:[];
+      patches.push({from:cell.sourceFrom,to:cell.sourceTo,text});
+    }
+  }
+  const start=patches[0].from,end=patches.at(-1).to;
+  if(end-start>4096)return reject();
+  let replacement='',at=start;
+  for(const patch of patches){
+    replacement+=source.slice(at,patch.from)+patch.text;at=patch.to;
+  }
+  if(replacement.length>4096)return reject();
+  const mapped=sourceEdits.sourceChange(source,{from:start,to:end,insert:replacement});
+  if(!mapped.ok)return reject();
+  const projection=project(mapped.source);
+  if(!equalCanonicalProjection(expected,projection.doc))return reject();
+  const last=projection.blocks[index]?.cells?.[first.tableRow+rows.length-1]?.[first.tableCol+width-1];
+  if(!last)return reject();
+  return {...mapped,projection,inverseSource:mapped.inverse,selection:{from:last.to,to:last.to}};
+}
 
 // Main and renderer run the same bounded mapper. No new IPC, save capability,
 // arbitrary source offsets or whole-document serializer is introduced.

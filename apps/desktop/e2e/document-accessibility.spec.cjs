@@ -1,3 +1,4 @@
+const {clickWorkspaceControl, workspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {closeDocumentApp}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
@@ -31,14 +32,16 @@ test('keyboard workspace: named content, roving tools, modal focus and contrast 
   await expect(p.locator('#empty-open')).toBeEnabled();await p.locator('#empty-open').click();
   const editor=p.locator('#editor .tiptap');
   await expect(editor).toHaveAttribute('role','document');await expect(editor).toHaveAccessibleName('只读正文：Keyboard article.md');
-  await expect(p.locator('#session-filter')).toHaveAccessibleName('筛选已打开文档');
-  await p.locator('#show-reading-settings').focus();await p.keyboard.press('F6');await expect(editor).toBeFocused();
+  await expect(p.locator('#session-filter')).toBeHidden();
+  await expect(p.locator('#new-temporary')).toHaveAccessibleName('新建文档');
+  await (await workspaceControl(p,'show-reading-settings')).focus();await p.keyboard.press('F6');await expect(editor).toBeFocused();
   await semantics('read-only');
   await p.locator('#edit-copy').click();await idle();await expect(editor).toHaveAttribute('role','textbox');
   await expect(editor).toHaveAttribute('aria-multiline','true');await expect(editor).toHaveAttribute('aria-readonly','false');
   await semantics('editing');
   const before=await snap();
   await expect(editor).toHaveCSS('outline-style','none');
+  await clickWorkspaceControl(p,'toggle-document-outline');
   await editor.focus();await p.keyboard.press('F6');await expect(p.locator('#outline-filter')).toBeFocused();
   await p.keyboard.press('F6');await expect(p.locator('#session-filter')).toBeFocused();
   await p.keyboard.press('Shift+F6');await expect(p.locator('#outline-filter')).toBeFocused();
@@ -49,19 +52,19 @@ test('keyboard workspace: named content, roving tools, modal focus and contrast 
   const available=await tools.locator('button:enabled').evaluateAll(ns=>ns.map(n=>n.id));
   await expect(p.locator('#'+available[0])).toBeFocused();await p.keyboard.press('End');await expect(p.locator('#'+available.at(-1))).toBeFocused();
   await p.keyboard.press('ArrowRight');await expect(p.locator('#'+available[0])).toBeFocused();
-  await p.keyboard.press('Tab');await expect(p.locator('#reading-tools button[tabindex="0"]')).toBeFocused();
-  await p.locator('#format-block').focus();await p.keyboard.press('Tab');await expect(p.locator('#'+available[0])).toBeFocused();
+  await p.keyboard.press('Tab');await expect(editor).toBeFocused();
+  await (await workspaceControl(p,'format-block')).focus();await p.keyboard.press('Tab');await expect(p.locator('#'+available[0])).toBeFocused();
   expect((await snap()).source).toBe(before.source);expect((await snap()).revision).toBe(before.revision);
   await p.keyboard.press('F6');await expect(editor).toBeFocused();await expect(editor).toHaveCSS('outline-style','solid');
   await p.keyboard.type('x');await idle();await expect(editor).toHaveCSS('outline-style','none');
   await p.keyboard.press('Meta+z');await idle();expect((await snap()).source).toBe(before.source);
   // Native dialog focus confinement and restoration, without clicking the page.
-  await p.locator('#show-reading-settings').focus();await p.keyboard.press('Enter');
+  await (await workspaceControl(p,'show-reading-settings')).focus();await p.keyboard.press('Enter');
   await expect(p.locator('#close-reading-settings')).toBeFocused();await p.keyboard.press('Shift+Tab');
   await expect(p.locator('#reset-reading-settings')).toBeFocused();await p.keyboard.press('Tab');await expect(p.locator('#close-reading-settings')).toBeFocused();
   await p.keyboard.press('F6');await expect(p.locator('#close-reading-settings')).toBeFocused();
   await p.keyboard.press('Escape');await expect(p.locator('#show-reading-settings')).toBeFocused();
-  await p.locator('#show-details').focus();await p.keyboard.press('Enter');
+  await (await workspaceControl(p,'show-details')).focus();await p.keyboard.press('Enter');
   await expect(p.locator('#close-document-details-dialog')).toBeFocused();
   await p.locator('#inspect-linked-file').focus();await p.keyboard.press('Enter');await expect(p.locator('#linked-file-status')).toContainText('一致');
   await p.keyboard.press('Tab');await expect(p.locator('#open-linked-file')).toBeFocused();await p.keyboard.press('Tab');await expect(p.locator('#reveal-linked-file')).toBeFocused();
@@ -69,7 +72,7 @@ test('keyboard workspace: named content, roving tools, modal focus and contrast 
   // Actual rendered palette, rather than assertions about particular CSS strings.
   evidence.contrast=[];
   for(const theme of ['light','dark']){
-   await p.locator('#show-reading-settings').click();await p.locator('#reading-theme-'+theme).click();await p.keyboard.press('Escape');
+   await clickWorkspaceControl(p,'show-reading-settings');await p.locator('#reading-theme-'+theme).click();await p.keyboard.press('Escape');
    const ratios=await p.evaluate(()=>{
     const c=getComputedStyle(document.body),rgb=h=>{h=h.trim().slice(1);if(h.length===3)h=[...h].map(x=>x+x).join('');return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)/255);};
     const lum=h=>rgb(h).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
@@ -97,7 +100,7 @@ test('keyboard workspace: named content, roving tools, modal focus and contrast 
   await expect(p.locator('#status')).toContainText('"composing":true');await p.keyboard.press('F6');await expect(editor).toBeFocused();
   expect((await snap()).source).toBe(before.source);await cdp.send('Input.insertText',{text:'测试'});await idle();
   expect((await snap()).source).toContain('测试');await p.keyboard.press('Meta+z');await idle();expect((await snap()).source).toBe(before.source);
-  await p.locator('#show-source').click();await expect(p.locator('#source-editor .cm-content')).toHaveAccessibleName('Markdown 源码编辑');
+  await clickWorkspaceControl(p,'show-source');await expect(p.locator('#source-editor .cm-content')).toHaveAccessibleName('Markdown 源码编辑');
   await expect(p.locator('#source-editor .cm-editor')).toHaveCSS('outline-style','none');
   await p.locator('#select-source').focus();await p.keyboard.press('Tab');
   await expect(p.locator('#source-editor .cm-content')).toBeFocused();

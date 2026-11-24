@@ -1,3 +1,4 @@
+import {previewTextRuns} from './document-semantic-preview.mjs';
 // Window-local presentation. No document mutation, IPC, file path or storage authority.
 export const defaultReading = Object.freeze({ theme: 'light', font: 'sans', size: '17', width: '680', spacing: '1.95' });
 const choices = Object.freeze({ theme: ['light', 'dark', 'system'], font: ['sans', 'serif'],
@@ -10,6 +11,8 @@ export function documentHeadings(doc) {
   // Match the current source projection: only top-level rendered heading nodes.
   // Fenced code, opaque syntax and nested structures never become outline entries.
   doc?.forEach((node, position) => {
+    if(node.type.name==='documentPreview' && /^h[1-6]$/.test(node.attrs.tree?.tag))
+      headings.push({position,level:Number(node.attrs.tree.tag[1]),title:previewTextRuns(node.attrs.tree).join(' ')||'无标题',preview:true});
     if (node.type.name === 'heading' && Number.isInteger(node.attrs.level) && node.attrs.level >= 1 && node.attrs.level <= 6)
       headings.push({ position, level: node.attrs.level, title: node.textContent || '无标题' });
   });
@@ -96,7 +99,8 @@ export function createReadingView({ byId, context }) {
   function target(item) {
     const { editor, state } = context();
     if (!navigable() || doc.querySelector('dialog[open]') || state.confirmed.sessionId !== mappedSession || editor.state.doc !== mappedDoc) return null;
-    const node = editor.view.nodeDOM(item.position);
+    const block = editor.view.nodeDOM(item.position);
+    const node = item.preview ? block?.querySelector('h'+item.level) : block;
     return node?.nodeName === 'H' + item.level && editor.view.dom.contains(node) ? node : null;
   }
   function jump(item) {
@@ -200,7 +204,7 @@ export function createReadingView({ byId, context }) {
     showOutline(opened); scheduleActive();
   }
   return { sync, configure() {
-    enabled = true; opened = !narrow?.matches; apply(); sync();
+    enabled = true; opened = false; apply(); sync();
   }, close() {
     if (dialog.open) dialog.close();
     if (narrow?.matches) showOutline(false);

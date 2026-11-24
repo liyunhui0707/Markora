@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy,closeDocumentApp}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -30,11 +31,11 @@ test('rich long writing: headings, formatted paragraphs, source, history, export
    const raw=selector==='h2'?marker:`Paragraph ${index} **bold** *italic* \`code\` ${'中文 🌿 ordinary text. '.repeat(25)}target.`;
    expected=expected.replace(raw,raw+text);await expect.poll(async()=>(await snap())?.source===expected).toBe(true);
    rounds.push({selector,index,units:text.length,elapsedMs:Date.now()-start});
-   await page.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source).toBe(expected.replace(raw+text,raw+text.slice(0,-1)));
-   await page.locator('#format-redo').click();await expect.poll(async()=>(await snap())?.source===expected).toBe(true);
+   await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap())?.source).toBe(expected.replace(raw+text,raw+text.slice(0,-1)));
+   await clickWorkspaceControl(page,'format-redo');await expect.poll(async()=>(await snap())?.source===expected).toBe(true);
   }
-  await page.locator('#show-source').click();await expect(page.locator('#source-editor .cm-content')).toBeVisible();await page.keyboard.press('Escape');
-  await page.locator('#show-document-find').click();await page.locator('#find-query').fill('target.');await expect(page.locator('#find-count')).toHaveText('1 / 600');await page.keyboard.press('Escape');
+  await clickWorkspaceControl(page,'show-source');await expect(page.locator('#source-editor .cm-content')).toBeVisible();await page.keyboard.press('Escape');
+  await clickWorkspaceControl(page,'show-document-find');await page.locator('#find-query').fill('target.');await expect(page.locator('#find-count')).toHaveText('1 / 600');await page.keyboard.press('Escape');
   await expect.poll(async()=>{const s=await snap();return s?.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);const before=await snap();
   await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});dialog.showMessageBox=async()=>({response:1});},target);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);

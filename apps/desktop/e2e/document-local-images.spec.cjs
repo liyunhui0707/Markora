@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto'),zlib=require('node:zlib');
@@ -27,13 +28,13 @@ test('local images: choose, preview, exact attachments export, reuse, readonly r
  async function choose(file){await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},file);}
  async function exportTo(p,target){await app.evaluate(({dialog},target)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:target});},target);await createMarkdownCopy(p);await expect(p.locator('#open-confirmed-copy')).toBeVisible();await expect.poll(async()=> (await current(p))?.confirmedCopy?.filePath).toBe(target);}
  try{
-  let p=await launch();await p.locator('#empty-open').click();await p.locator('#edit-copy').click();await p.locator('#editor p').click();await p.locator('#format-image').click();
+  let p=await launch();await p.locator('#empty-open').click();await p.locator('#edit-copy').click();await p.locator('#editor p').click();await clickWorkspaceControl(p,'format-image');
   await app.evaluate(({dialog})=>{dialog.showOpenDialog=async()=>({canceled:true,filePaths:[]});});await p.locator('#image-choose').click();await expect(p.locator('#image-choose')).toBeEnabled();await expect(p.locator('#image-href')).toHaveValue('');
   await choose(picture);await p.locator('#image-choose').click();await expect(p.locator('#image-href')).toHaveValue(/^markdown-image-/);await p.locator('#image-label').fill('本地合成图片');await p.locator('#image-apply').click();
   await expect(loaded(p)).toHaveCount(1);await expect.poll(()=>loaded(p).evaluate(n=>n.naturalWidth)).toBe(240);
   const withFirst=await p.locator('#source').textContent();await p.keyboard.press('Meta+z');await expect(loaded(p)).toHaveCount(0);await p.keyboard.press('Meta+Shift+z');await expect(loaded(p)).toHaveCount(1);await expect(p.locator('#source')).toHaveText(withFirst);
   const jpeg=path.join(root,'selected.jpg');const jpg=Buffer.from(await app.evaluate(({nativeImage},base64)=>Array.from(nativeImage.createFromBuffer(Buffer.from(base64,'base64')).toJPEG(85)),png.toString('base64')));await fs.writeFile(jpeg,jpg,{flag:'wx',mode:0o600});
-  await p.keyboard.press('Enter');await p.keyboard.type('After image.');await expect(p.locator('#source')).toContainText('After image.');await p.locator('#format-image').click();await choose(jpeg);await p.locator('#image-choose').click();await expect(p.locator('#image-href')).toHaveValue(/\.jpg$/);await p.locator('#image-label').fill('JPEG preview');await p.locator('#image-apply').click();await expect(loaded(p)).toHaveCount(2);await expect.poll(()=>loaded(p).nth(1).evaluate(n=>n.naturalWidth)).toBe(240);
+  await p.keyboard.press('Enter');await p.keyboard.type('After image.');await expect(p.locator('#source')).toContainText('After image.');await clickWorkspaceControl(p,'format-image');await choose(jpeg);await p.locator('#image-choose').click();await expect(p.locator('#image-href')).toHaveValue(/\.jpg$/);await p.locator('#image-label').fill('JPEG preview');await p.locator('#image-apply').click();await expect(loaded(p)).toHaveCount(2);await expect.poll(()=>loaded(p).nth(1).evaluate(n=>n.naturalWidth)).toBe(240);
   await expect.poll(async()=>{const s=await current(p);return s.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);
   fixture=createHomeFixture('Writing-synthetic-E2E-');const target=path.join(fixture.dir,'Pictures.md');await exportTo(p,target);
   const exported=await current(p),bytes=await fs.readFile(target);expect(bytes).toEqual(Buffer.from('\ufeff'+exported.source));expect(exported.confirmedCopy.attachments).toHaveLength(2);fixture.recordFile('Pictures.md',bytes);

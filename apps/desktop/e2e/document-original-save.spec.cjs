@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
@@ -23,16 +24,16 @@ test('original save: direct save, repeat, undo, conflict, restart recovery and s
   },{original,target});await expect(p.locator('#empty-new')).toBeEnabled();return p;
  }
  async function stop(){if(app){await app.close();app=null;const r=await exit;exits.push(r);expect(r).toEqual({code:0,signal:null});}}
- async function edit(p,text){await p.locator('#show-source').click();const content=p.locator('#source-editor .cm-content');await content.click();await p.keyboard.press('Meta+End');await p.keyboard.insertText(text);await p.locator('#apply-source').click();await expect(p.locator('#source-dialog')).toBeHidden();await backup(p);}
+ async function edit(p,text){await clickWorkspaceControl(p,'show-source');const content=p.locator('#source-editor .cm-content');await content.click();await p.keyboard.press('Meta+End');await p.keyboard.insertText(text);await p.locator('#apply-source').click();await expect(p.locator('#source-dialog')).toBeHidden();await backup(p);}
  try{
   let p=await launch();await p.locator('#empty-open').click();await expect(p.locator('#save-original')).toBeHidden();await p.locator('#edit-copy').click();await expect(p.locator('#save-original')).toBeVisible();
   await edit(p,'More');const before=await snap(p);expect(await fs.readFile(original)).toEqual(bytes);await p.locator('#save-original').click();await expect.poll(async()=>(await snap(p))?.originalSave?.receipt?.state).toBe('saved-confirmed');
   const saved=await snap(p);expect(saved.dirty).toBe(false);expect(saved.source).toBe(before.source);expect(saved.canUndo).toBe(true);expect(await fs.readFile(original)).toEqual(Buffer.from('\ufeff'+saved.source));
   const record=saved.originalSave.receipt;expect(await fs.readFile(path.join(versions,record.recordId,'baseline.md'))).toEqual(bytes);expect(await fs.readFile(path.join(versions,record.recordId,'draft.md'))).toEqual(Buffer.from('\ufeff'+saved.source));
-  await p.locator('#format-undo').click();await expect.poll(async()=>(await snap(p))?.dirty).toBe(true);await p.locator('#format-redo').click();await expect.poll(async()=>(await snap(p))?.dirty).toBe(false);
+  await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap(p))?.dirty).toBe(true);await clickWorkspaceControl(p,'format-redo');await expect.poll(async()=>(await snap(p))?.dirty).toBe(false);
   await edit(p,' Second');await p.keyboard.press('Meta+s');await expect.poll(async()=>(await snap(p))?.dirty).toBe(false);expect(await app.evaluate(()=>global.saveRequests)).toBe(0); // Ordinary Save has no redundant consent dialog.
   const second=await snap(p);expect(second.originalSave.lastConfirmed.revision).toBe(second.revision);
-  await p.locator('#show-details').click();await expect(p.locator('#original-save-receipt')).toContainText(second.originalSave.lastConfirmed.sha256);await p.locator('#close-document-details-dialog').click();await p.screenshot({path:info.outputPath('original-save-success.png')});
+  await clickWorkspaceControl(p,'show-details');await expect(p.locator('#original-save-receipt')).toContainText(second.originalSave.lastConfirmed.sha256);await p.locator('#close-document-details-dialog').click();await p.screenshot({path:info.outputPath('original-save-success.png')});
   await edit(p,' Third');await fs.writeFile(original,'Outside writer content');await p.locator('#save-original').click();await expect.poll(async()=>(await snap(p))?.originalSave?.stopped).toBe(true);const conflicted=await snap(p);
   expect(conflicted.dirty).toBe(true);expect(conflicted.originalSave.lastConfirmed).toEqual(second.originalSave.lastConfirmed);expect(await fs.readFile(original,'utf8')).toBe('Outside writer content');await expect(p.locator('#original-save-status')).toContainText('保存仍暂停');await expect(p.locator('#original-save-status')).toContainText('external-change');await expect(p.locator('#save-original')).toBeDisabled();
   await p.screenshot({path:info.outputPath('original-save-conflict.png')});

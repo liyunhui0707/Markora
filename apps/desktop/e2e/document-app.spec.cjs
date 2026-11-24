@@ -1,3 +1,4 @@
+const {clickWorkspaceControl, workspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const { test, expect, _electron: electron } = require('@playwright/test');
 const { authorMixedDocument } = require('./common-authoring.cjs');
@@ -96,7 +97,7 @@ test('installed document app: exclusive export, readonly reopen, restart and dra
     const paragraphSplit = inlineReplaced.replace('**ld**', '**l**\r\n\r\n**d**');
     await boundaryKey('Enter', paragraphSplit); await boundaryKey('Backspace', inlineReplaced);
     await boundaryKey('Meta+z', paragraphSplit); await boundaryKey('Meta+Shift+z', inlineReplaced);
-    await page.locator('#format-block').selectOption('bullet-list');
+    await (await workspaceControl(page,'format-block')).selectOption('bullet-list');
     const listed = inlineReplaced.replace('Alp新😀', '- Alp新😀');
     await expect.poll(async () => (await snapshot(page, id)).source).toBe(listed);
     // The new single-item range path also runs in the installed product ASAR.
@@ -136,11 +137,11 @@ test('installed document app: exclusive export, readonly reopen, restart and dra
       return[n.editor.view.posAtDOM(text,0),n.editor.view.posAtDOM(text,5)];
     });
     await expect.poll(()=>page.locator('#editor .tiptap').evaluate(n=>[n.editor.state.selection.from,n.editor.state.selection.to])).toEqual(italicRange);
-    await page.locator('#format-italic').click();const italicSource=beforeItalic.replace('First','*First*');
+    await clickWorkspaceControl(page,'format-italic');const italicSource=beforeItalic.replace('First','*First*');
     await expect.poll(async()=>(await snapshot(page,id)).source).toBe(italicSource);
     await expect(page.locator('#editor em').first()).toHaveText('First');
     await boundaryKey('Meta+i',beforeItalic);await boundaryKey('Meta+z',italicSource);
-    await boundaryKey('Meta+i',beforeItalic);await page.locator('#format-code').click();
+    await boundaryKey('Meta+i',beforeItalic);await clickWorkspaceControl(page,'format-code');
     const codeSource=beforeItalic.replace('First','`First`');await expect.poll(async()=>(await snapshot(page,id)).source).toBe(codeSource);
     await expect(page.locator('#editor code').first()).toHaveText('First');
     await boundaryKey('Meta+e',beforeItalic);await boundaryKey('Meta+z',codeSource);

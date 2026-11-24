@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),{createHash}=require('node:crypto');
@@ -23,7 +24,7 @@ test('local image portability workflow: explicit collection, drop, exact history
   await choose(original);await expect(page.locator('#empty-open')).toBeEnabled();
  }
  async function stop(){if(app){await app.close();app=null;const e=await exit;exits.push(e);expect(e).toEqual({code:0,signal:null});}}
- async function selectImage(index){await page.locator('#editor [data-document-image]').nth(index).click();await page.locator('#format-image').click();await expect(page.locator('#image-dialog')).toBeVisible();}
+ async function selectImage(index){await page.locator('#editor [data-document-image]').nth(index).click();await clickWorkspaceControl(page,'format-image');await expect(page.locator('#image-dialog')).toBeVisible();}
  async function backup(){await expect.poll(async()=>{const s=await snap();return s.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);}
  try{
   await launch();const jpeg=Buffer.from(await app.evaluate(({nativeImage},base64)=>Array.from(nativeImage.createFromBuffer(Buffer.from(base64,'base64')).toJPEG(85)),png.toString('base64')));await fs.writeFile(path.join(assets,'photo.jpg'),jpeg,{flag:'wx',mode:0o600});
@@ -42,7 +43,7 @@ test('local image portability workflow: explicit collection, drop, exact history
   // Do not send snapshot IPC while the File arrayBuffer/import is settling:
   // preload intentionally refuses imports during any outstanding IPC.
   const dropped='markdown-image-'+hash(drop)+'.png',beforeDrop=expected;expected=expected.replace('Drop here.','Drop here.\r\n\r\n![拖入的图片](<'+dropped+'>)');await expect(loaded()).toHaveCount(3);await check();names.push(dropped);
-  await page.locator('#format-undo').click();expected=beforeDrop;await check();await expect(loaded()).toHaveCount(2);await page.locator('#format-redo').click();expected=beforeDrop.replace('Drop here.','Drop here.\r\n\r\n![拖入的图片](<'+dropped+'>)');await check();await backup();
+  await clickWorkspaceControl(page,'format-undo');expected=beforeDrop;await check();await expect(loaded()).toHaveCount(2);await clickWorkspaceControl(page,'format-redo');expected=beforeDrop.replace('Drop here.','Drop here.\r\n\r\n![拖入的图片](<'+dropped+'>)');await check();await backup();
   await page.keyboard.press('Meta+s');await expect.poll(async()=>(await snap())?.dirty).toBe(false);expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);
   expect(await fs.readFile(path.join(assets,'图 示.png'))).toEqual(png);expect(await fs.readFile(path.join(assets,'photo.jpg'))).toEqual(jpeg);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);

@@ -1,3 +1,4 @@
+import {previewTextRuns} from './document-semantic-preview.mjs';
 import {planDocumentReplace} from './document-replace.mjs';
 import {TextSelection,Selection} from '@tiptap/pm/state';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -11,14 +12,20 @@ export function findDocumentText(doc, query, matchCase = false) {
   const matches = []; let total = 0;
   if (!query || query.length > FIND_QUERY_LIMIT) return { matches, total };
   const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), matchCase ? 'gu' : 'giu');
-  function scan(text, start) {
+  function scan(text, start, previewOffset=null) {
     pattern.lastIndex = 0;
     for (const hit of text.matchAll(pattern)) {
       total++;
-      if (matches.length < FIND_LIMIT) matches.push({ from: start + hit.index, to: start + hit.index + hit[0].length });
+      if (matches.length < FIND_LIMIT) matches.push(previewOffset!==null ? {from:start,to:start+1,preview:true,
+        offset:previewOffset+hit.index,text:hit[0]} : { from: start + hit.index, to: start + hit.index + hit[0].length });
     }
   }
   doc.descendants((node, pos) => {
+    if(node.type.name==='documentPreview'){
+      let offset=0;
+      for(const run of previewTextRuns(node.attrs.tree)){scan(run,pos,offset);offset+=run.length;}
+      return false;
+    }
     if (!node.isTextblock) return;
     let text = '', start = pos + 1;
     node.forEach((child, offset) => {
@@ -32,6 +39,32 @@ export function findDocumentText(doc, query, matchCase = false) {
   return { matches, total };
 }
 const key = new PluginKey('documentFind');
+// Preview nodes occupy one PM position. Resolve the selected hit against
+// parser-owned text leaves without moving the selection or mutating the DOM.
+function previewRange(view,hit){
+  if(!hit?.preview)return null;
+  const model=view.state.doc.nodeAt(hit.from),dom=view.nodeDOM(hit.from);
+  if(!model?.attrs.tree||!dom?.firstElementChild)return null;
+  let offset=0,start,end;
+  function visit(tree,node){
+    if(typeof tree==='string'){
+      const limit=offset+tree.length;
+      if(node?.nodeType===3&&node.data===tree){
+        if(hit.offset>=offset&&hit.offset<limit)start=[node,hit.offset-offset];
+        const tail=hit.offset+hit.text.length;
+        if(tail>offset&&tail<=limit)end=[node,tail-offset];
+      }
+      offset=limit;return;
+    }
+    const matching=node?.localName===tree.tag&&tree.formula===undefined&&tree.diagram===undefined;
+    for(const [i,child] of tree.children.entries())visit(child,matching?node.childNodes[i]:null);
+  }
+  visit(model.attrs.tree,dom.firstElementChild);
+  if(!start||!end)return null;
+  const range=dom.ownerDocument.createRange();
+  range.setStart(...start);range.setEnd(...end);
+  return range.toString()===hit.text?range:null;
+}
 export function createFindPlugin() {
   return new Plugin({ key, state: {
     init: () => DecorationSet.empty,
@@ -52,11 +85,20 @@ export function createFindView({ byId, context }) {
       && !editor.view.composing && s.source === s.confirmed.source;
   };
   const modal = () => doc.querySelector('dialog[open]');
+  const previewHighlight='markora-current-preview';
+  const registry=doc.defaultView?.CSS?.highlights;
+  let activeRange=null;
+  function clearHighlight(){registry?.delete(previewHighlight);activeRange=null;}
   function publish() {
     const { editor } = context();
-    const decorations = matches.map((m, i) => Decoration.inline(m.from, m.to,
-      { class: 'document-find-hit' + (i === active ? ' is-current' : ''), 'data-find-index': String(i) }));
+    clearHighlight();
+    const current=matches[active],needsBlock=current?.preview&&(!registry||!previewRange(editor.view,current));
+    const decorations = matches.flatMap((m, i) => m.preview?[]:[Decoration.inline(m.from, m.to,
+      { class: 'document-find-hit' + (i === active ? ' is-current' : ''), 'data-find-index': String(i) })]);
+    if(needsBlock)decorations.push(Decoration.node(current.from,current.to,{class:'document-find-hit is-current'}));
     editor.view.dispatch(editor.state.tr.setMeta(key, DecorationSet.create(editor.state.doc, decorations)).setMeta('addToHistory', false));
+    activeRange=previewRange(editor.view,matches[active]);
+    if(activeRange&&registry)registry.set(previewHighlight,new doc.defaultView.Highlight(activeRange));
   }
   function controls(paused = false) {
     for (const id of ['find-previous', 'find-next']) byId(id).disabled = paused || !matches.length;
@@ -94,8 +136,13 @@ export function createFindView({ byId, context }) {
     const {editor,controller,state}=context();
     if (!controller || state.confirmed.readOnly || state.confirmed.temporary!==true || state.recoveryRecords?.length
         || !matches.length || (all && total>FIND_LIMIT)) return;
+    const selected=all?matches:[matches[active]];
+    if(selected.some(m=>m.preview)){
+      byId('find-replace-status').textContent='匹配包含只读预览。可在源码中修改，本次未替换。';
+      return;
+    }
     const plan=planDocumentReplace(state.confirmed.source,editor.state.doc,
-      all?matches:[matches[active]],byId('find-replacement').value,editor.state.selection);
+      selected,byId('find-replacement').value,editor.state.selection);
     const status=byId('find-replace-status');
     if (!plan.ok) {status.textContent='匹配跨越受保护结构、替换会改变 Markdown 结构，或批量处理超过当前限制。请缩小范围或在源码中修改；本次未替换。';return;}
     if(plan.source===state.confirmed.source){status.textContent='替换内容与原文相同，未修改。';return;}
@@ -115,7 +162,7 @@ export function createFindView({ byId, context }) {
     const { editor, state } = context();
     if (!opened || !ready() || queryComposing || replacementComposing || modal() || !matches[active]
         || mapped?.doc !== editor.state.doc || mapped.session !== state.confirmed.sessionId) return;
-    const rect = editor.view.coordsAtPos(matches[active].from), bounds = scroll.getBoundingClientRect();
+    const rect = activeRange?.getBoundingClientRect()??editor.view.coordsAtPos(matches[active].from), bounds = scroll.getBoundingClientRect();
     // Scroll only. Do not alter selection, including in read-only/opaque blocks.
     scroll.scrollTo({ top: Math.max(0, scroll.scrollTop + rect.top - bounds.top - scroll.clientHeight / 3), behavior: 'auto' });
   }
@@ -176,6 +223,7 @@ export function createFindView({ byId, context }) {
     }
   }, true);
   return { sync, reset() {
+    clearHighlight();
     opened = false; bar.hidden = true; button.setAttribute('aria-expanded', 'false');
     input.value = ''; replacement.value=''; byId('find-replace-status').textContent=''; matches = []; total = 0; active = -1; mapped = null;
   }, configure() { enabled = true; sync(); } };

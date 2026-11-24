@@ -10,7 +10,11 @@ test('format corpus projects common structures and explicitly retains unsupporte
  const text=n=>(n.content||[]).map(c=>c.text||'').join('');
  assert(projection.doc.content.some(n=>n.type==='codeBlock'&&n.attrs.sourceEditable&&n.attrs.language==='javascript'));
  assert(projection.doc.content.some(n=>n.type==='documentPreview'&&n.attrs.kind==='horizontalRule'));
- for(const spelling of ['转义文字：','字符实体与字面量：'])assert(projection.doc.content.some(n=>n.type==='documentPreview'&&JSON.stringify(n.attrs.tree).includes(spelling)),spelling);
+ for(const expected of ['转义文字：*这不是斜体*，# 这不是标题，[这不是链接]。','字符实体与字面量：& < > "；全角空格：甲　乙；不换行空格：甲 乙。']){
+   const paragraph=projection.doc.content.find(n=>n.type==='paragraph'&&text(n)===expected);
+   assert.ok(paragraph,expected);
+   assert(paragraph.content.every(n=>n.type==='text'&&!n.marks?.length));
+ }
  assert(projection.doc.content.some(n=>n.type==='codeBlock'&&!n.attrs.sourceEditable&&text(n).startsWith('<details>')));
  assert.deepEqual(fs.readFileSync(path.resolve(__dirname,'../../../examples/format-boundaries.md')),before);
 });

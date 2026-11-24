@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
 
@@ -38,10 +39,10 @@ for(const [chapters,nl] of [[160,'\n'],[700,'\r\n']]) test(`daily writing: ${cha
   expect((await snap(p)).source).toBe(typed);expect(await p.evaluate(()=>keptOutline===document.querySelector('#outline-list button'))).toBe(true);
   await p.keyboard.insertText(' 中文😀[]');await idle(p);const unicode=typed.replace('Opening paragraph.'+text,'Opening paragraph.'+text+' 中文😀[]');
   expect((await snap(p)).source).toBe(unicode);
-  await p.locator('#format-undo').click();await expect.poll(async()=>(await snap(p)).source).toBe(typed);
-  await p.locator('#format-redo').click();await expect.poll(async()=>(await snap(p)).source).toBe(unicode);
-  await p.locator('#show-source').click();await expect(p.locator('#source-editor .cm-content')).toBeVisible();await expect(p.locator('#source-metadata')).toContainText('UTF-8 BOM');await p.keyboard.press('Escape');expect((await snap(p)).source).toBe(unicode);
-  if(await p.locator('#document-outline').isHidden())await p.locator('#toggle-document-outline').click();
+  await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap(p)).source).toBe(typed);
+  await clickWorkspaceControl(p,'format-redo');await expect.poll(async()=>(await snap(p)).source).toBe(unicode);
+  await clickWorkspaceControl(p,'show-source');await expect(p.locator('#source-editor .cm-content')).toBeVisible();await expect(p.locator('#source-metadata')).toContainText('UTF-8 BOM');await p.keyboard.press('Escape');expect((await snap(p)).source).toBe(unicode);
+  if(await p.locator('#document-outline').isHidden())await clickWorkspaceControl(p,'toggle-document-outline');
   await p.locator('#outline-filter').fill('Chapter '+(chapters-1));await expect(p.locator('#outline-count')).toHaveText(`1 / ${chapters+1}`);
   await p.locator('#outline-filter').press('Enter');expect(await p.locator('#document-scroll').evaluate(n=>n.scrollTop)).toBeGreaterThan(10000);
   await backup(p);const saved=await snap(p),draftId=await p.evaluate(async label=>(await window.documentDemo.listDrafts()).drafts.find(d=>d.label===label).id,saved.label);

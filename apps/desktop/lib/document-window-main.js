@@ -22,7 +22,7 @@ if (nativeOpens) app.on('open-file', (event, file) => {
   event.preventDefault(); nativeOpens.enqueue(file); focusDocumentWindow();
 });
 if (product) {
-  app.setName('markora');
+  app.setName('Markora');
   // Stable profile supplies a single-instance lock; drafts keep their existing location.
   app.setPath('userData', path.join(app.getPath('appData'), 'Markdown Vault Document'));
   if (!app.requestSingleInstanceLock()) { app.quit(); return; }
@@ -36,7 +36,7 @@ const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'document-dem
 fs.chmodSync(root, 0o700);
 const profile = path.join(root, 'profile'); fs.mkdirSync(profile, { mode: 0o700 });
 if (!product) {
-  app.setName(readOnlyWindow ? 'markora QA' : 'Document synthetic memory QA');
+  app.setName(readOnlyWindow ? 'Markora QA' : 'Document synthetic memory QA');
   app.setPath('userData', profile);
 }
 app.setPath('sessionData', profile);
@@ -132,6 +132,7 @@ app.whenReady().then(async () => {
   registerDocumentIpc(ipcMain, manager);
   session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (_details, cb) => cb({ cancel: true }));
   const win = new BrowserWindow({ width: 1050, height: 800, title: readOnlyWindow ? 'Markdown — 原文只读' : 'Phase 1B-2 — synthetic memory only',
+    ...(readOnlyWindow && process.platform==='darwin' ? {titleBarStyle:'hidden',trafficLightPosition:{x:12,y:15}} : {}),
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false,
       preload: path.join(__dirname, 'document-demo-preload.js') } });
   productWindow = win;

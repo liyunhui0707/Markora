@@ -1,6 +1,6 @@
 {
   "name": "markora-desktop",
-  "version": "0.82.1",
+  "version": "0.85.0",
   "description": "markora — a local Markdown editor for macOS",
   "main": "document-app-main.js",
   "scripts": {
@@ -91,6 +91,7 @@
     "katex": "0.19.1",
     "marked": "^17.0.5",
     "mermaid": "^11.17.0",
+    "micromark-util-decode-string": "2.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",

@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),{createHash}=require('node:crypto');
@@ -30,8 +31,8 @@ test('nested save: edit original copy, export, reopen, refusal and cancellation 
   expect(await fs.readFile(target)).toEqual(exported);await expect(p.locator('#copy-summary-compact')).toContainText('另存新文件.md');
   await app.evaluate(({dialog})=>{dialog.showSaveDialog=async()=>({canceled:true});});
   await save();await expect(p.locator('#copy-operation-alert')).toContainText('操作已取消');
-  await p.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source).not.toContain('original.X');
-  await p.locator('#format-redo').click();await expect.poll(async()=>(await snap())?.source).toBe(draft.source);
+  await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap())?.source).not.toContain('original.X');
+  await clickWorkspaceControl(p,'format-redo');await expect.poll(async()=>(await snap())?.source).toBe(draft.source);
   await app.evaluate(({dialog},target)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[target]});},target);
   await p.locator('#open-file').click();await expect.poll(async()=>(await snap())?.readOnly).toBe(true);
   expect((await snap()).source).toBe(draft.source);expect(await fs.readFile(original)).toEqual(bytes);expect(await fs.readFile(target)).toEqual(exported);

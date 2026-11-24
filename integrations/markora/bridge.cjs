@@ -22,6 +22,10 @@ function sourceBytes(value){
  if(units>MAX_SOURCE_UNITS||Buffer.byteLength(value)>MAX_DOCUMENT_BYTES)fail('document-too-large');
  return Buffer.from(value,'utf8');
 }
+function defaultAppPath(home) {
+ const local=path.join(home,'Applications','Markora.app');
+ return fs.existsSync(local) ? local : '/Applications/Markora.app';
+}
 function nativeHost(config){
  function info(){
   if(process.platform!=='darwin')return {installed:false,running:null,reason:'macos-required'};
@@ -97,4 +101,4 @@ function createBridge(config,host=nativeHost(config)){
   },
  };
 }
-module.exports={createBridge,BridgeError,sourceBytes,filename,MAX_DOCUMENT_BYTES};
+module.exports={defaultAppPath,createBridge,BridgeError,sourceBytes,filename,MAX_DOCUMENT_BYTES};

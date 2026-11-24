@@ -20,7 +20,7 @@ for(const nl of ['\n','\r\n','\r'])test('multi-paragraph list and nested quote p
  }
 });
 test('whole unsupported child structures remain protected',()=>{
- for(const source of ['- A\n\n  ```js\n  code\n  ```','> > &amp;','> > First\nlazy',Array.from({length:7},(_,i)=>'> '.repeat(i+1)+'Deep').join('\n')]){
+ for(const source of ['- A\n\n  ```js\n  code\n  ```','> > First\nlazy',Array.from({length:7},(_,i)=>'> '.repeat(i+1)+'Deep').join('\n')]){
   const p=projectSource(source);assert.equal(p.doc.content[0].type,'documentPreview');
   assert.equal(p.spans.length,0);assert.equal(mapTextEdit(source,{from:0,to:1,insert:'x'}).ok,false);
  }

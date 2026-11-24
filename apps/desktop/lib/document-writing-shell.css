@@ -321,3 +321,54 @@ body[data-document-viewer] input::placeholder {opacity:1;color:var(--muted)}
 #copy-feedback #copy-summary-compact {flex:1 1 220px;min-width:0;width:auto;max-width:none;margin:0}
 #copy-feedback #confirmed-copy-actions {width:auto;max-width:none;margin:0}
 #copy-feedback .copy-action-buttons button {border:0;background:transparent;padding:3px 5px;font-size:11px;color:var(--muted)}
+
+/* One macOS title bar; the text canvas owns the remaining height. */
+#writing-app {
+  --rail:clamp(176px,20vw,212px);
+  --title-height:44px;
+  grid-template-columns:var(--rail) minmax(0,1fr);
+  grid-template-rows:var(--title-height) minmax(0,1fr);
+}
+#writing-app > #document-header {
+  grid-area:1 / 1 / 2 / -1;min-height:0;
+  padding:0 16px 0 max(80px,calc(var(--rail) - 36px));
+  -webkit-app-region:drag;
+}
+#document-header :is(button,details,input,select) {-webkit-app-region:no-drag}
+#writing-app[data-sidebar=closed] > #document-header {padding-left:80px}
+#document-sidebar {grid-area:2 / 1}
+#writing-workspace {grid-area:2 / 2;position:relative}
+.sidebar-brand {gap:6px;padding:0 2px;min-height:51px;font-size:14px}
+body[data-document-viewer] .brand-mark,body[data-document-viewer] .brand-mark svg {width:19px;height:22px}
+.sidebar-brand #sidebar-actions {gap:1px;margin:0 0 0 auto}
+body[data-document-viewer] .sidebar-brand #sidebar-actions button,
+body[data-document-viewer][data-document-state=open] .sidebar-brand #sidebar-actions #new-temporary {
+  flex:none;width:27px;height:28px;padding:4px;border:0;background:transparent;color:var(--muted)
+}
+body[data-document-viewer] .sidebar-brand #sidebar-actions button:hover:enabled {background:var(--active)}
+#session-list .session-row {padding:6px 8px 6px 26px;border:0;box-shadow:none}
+.session-row::before {top:9px;left:9px}
+#session-list .session-row[aria-current=true] {background:var(--active);border:0;box-shadow:none;color:var(--ink)}
+.session-filter {margin:1px 0 7px}
+#sidebar-bottom {padding:10px}
+#sidebar-bottom button {display:flex;align-items:center;gap:10px;padding:6px 8px}
+#writing-toolbar {
+  position:absolute;inset:5px auto auto var(--gutter);z-index:3;max-width:calc(100% - 2 * var(--gutter));
+  height:auto;padding:3px 5px;border:1px solid var(--line);border-radius:7px;background:var(--surface);
+  box-shadow:0 2px 8px #20282012
+}
+#writing-toolbar:not(:has(#format-toolbar[data-contextual=true]:not([hidden]))) {display:none}
+#document-header #save-original {background:transparent;color:var(--ink);border-color:transparent}
+#document-header #save-original:hover:enabled {background:var(--active)}
+#file-actions-content {max-height:calc(100dvh - 56px);overflow:auto}
+#file-actions-content #reading-tools {display:block;margin:0}
+#file-actions-content button {width:100%;height:auto;white-space:nowrap}
+#file-actions-content svg {vertical-align:middle;margin-right:7px}
+#file-actions-content .icon-button {display:block;height:auto}
+@media(max-width:760px){
+  #writing-app,#writing-app[data-sidebar=closed] {grid-template-columns:minmax(0,1fr)}
+  #writing-app > #document-header {padding-left:80px}
+  #writing-workspace {grid-area:2 / 1}
+  #document-sidebar,#sidebar-scrim {top:var(--title-height)}
+  #writing-toolbar {left:8px;max-width:calc(100% - 16px)}
+}

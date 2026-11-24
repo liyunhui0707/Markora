@@ -33,8 +33,8 @@ test('surrogate splitting, cross-block edits and structural syntax fail closed',
   ]) assert.equal(mapTextEdit(source, change).ok, false);
   assert.equal(mapTextEdit(source,{from:h.from,to:bold.to,insert:'x'}).ok,true);
 });
-test('HTML, images, tables, unknown syntax, escaped/entities and unsupported multiline syntax are not editable', () => {
-  for (const s of ['<script>synthetic</script>', '![p](../x.png)', '| a |\n| - |\n| b |', '::: unknown', 'a &amp; b', 'a\\*b']) {
+test('HTML, images, tables, unknown syntax and table boundaries are not editable', () => {
+  for (const s of ['<script>synthetic</script>', '![p](../x.png)', '| a |\n| - |\n| b |', '::: unknown']) {
     assert.equal(projectSource(s).spans.length, 0, s);
     assert.equal(mapTextEdit(s, { from: 1, to: 2, insert: 'x' }).ok, false);
   }
@@ -89,7 +89,7 @@ test('writing V1: split/join inverses protect mixed line endings and unsupported
   const split=mapTextEdit(source,{from:one.from+1,to:one.from+1,insert:'\n\n'});
   assert.equal(split.ok,true);
   const back=mapTextEdit(split.source,split.inverse);assert.equal(back.ok,true);assert.equal(back.source,source);
-  for(const text of ['# heading','- list','> quote','```md extra\ncode\n```','A **bold** end.']){
+  for(const text of ['# heading','- list','> quote','<pre>code</pre>','A **bold** end.']){
     const q=projectSource(text),s=q.spans.find(s=>s.text);
     assert.equal(mapTextEdit(text,{from:s?.from||1,to:s?.from||1,insert:'\n\n'}).ok,false);
   }
@@ -173,7 +173,8 @@ test('multiline paste V1: forbidden structure and ambiguous whitespace reject at
   const nested='> > nested quote',nestedSpan=projectSource(nested).spans[0];
   assert.equal(mapTextEdit(nested,{from:nestedSpan.from,to:nestedSpan.from,insert:'One\n\nTwo'}).source,'> > One\n> > \n> > Twonested quote');
   assert.equal(mapTextEdit('# Heading',{from:1,to:1,insert:'One\n\nTwo'}).source,'# One\n\nTwoHeading');
-  for (const source of ['A &amp; tail.', '```md extra\ncode\n```']) {
+  assert.equal(mapTextEdit('A &amp; tail.',{from:1,to:1,insert:'One\n\nTwo'}).source,'One\n\nTwoA &amp; tail.');
+  for (const source of ['<span>literal</span>', '::: custom']) {
     const span = projectSource(source).spans[0];
     assert.equal(mapTextEdit(source, { from: span?.from || 1, to: span?.from || 1, insert: 'One\n\nTwo' }).ok, false);
   }

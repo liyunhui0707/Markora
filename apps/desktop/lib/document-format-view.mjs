@@ -24,9 +24,28 @@ export function createFormatView({ byId, context, report }) {
     byId(id).onpointerdown=e=>e.preventDefault();
     byId(id).onclick=async()=>{const c=context();if(blocked())return;await c.controller.history(id==='format-undo'?'undo':'redo');if(context().controller===c.controller)c.editor.view.focus();};
   }
+  const toolbar=byId('format-toolbar'), reveal=byId('show-format-tools');
+  let manual=false, session;
+  function openTools() {
+    if(blocked() || !context().editor) return;
+    manual=true;
+    byId('file-actions').open=false;
+    sync(); selector.focus();
+  }
+  reveal.onclick=openTools;
+  const doc=toolbar.ownerDocument;
+  doc?.addEventListener('pointerdown',event=>{
+    if(manual && !toolbar.contains(event.target) && !reveal.contains(event.target)) {manual=false;sync();}
+  },true);
+  doc?.addEventListener('keydown',event=>{
+    if(!manual || event.key!=='Escape' || event.isComposing || doc.querySelector('dialog[open]'))return;
+    manual=false;sync();context().editor?.view.focus();event.preventDefault();
+  });
   function sync() {
     const {state:s,editor}=context();
-    byId('format-toolbar').hidden=!s || s.confirmed.readOnly || s.confirmed.temporary!==true;
+    if(session!==s?.confirmed.sessionId){manual=false;session=s?.confirmed.sessionId;}
+    toolbar.hidden=!s || s.confirmed.readOnly || s.confirmed.temporary!==true;
+    toolbar.setAttribute('data-contextual', String(manual || (!!editor && !editor.state.selection.empty && !s?.composing && !editor.view?.composing)));
     const busy=!!blocked();selector.disabled=busy;for(const mark of ['bold','italic','code'])byId('format-'+mark).disabled=busy||!editor||editor.state.selection.empty||editor.state.selection.node?.type.name==='documentImage'||(editor.state.selection.$from.parent.type.name==='codeBlock');
     byId('format-undo').disabled=busy||!s?.confirmed.canUndo;byId('format-redo').disabled=busy||!s?.confirmed.canRedo;
     let value=editor?.state.selection.node?.type.name==='documentImage'?'image':'paragraph';

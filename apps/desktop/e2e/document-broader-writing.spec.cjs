@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test, expect, _electron} = require('@playwright/test');
 const fs = require('node:fs/promises'), os = require('node:os'), path = require('node:path');
@@ -51,24 +52,24 @@ test('broader writing: image, long navigation, source, export isolation and rest
     // insertText supplies controlled Unicode, not a native Chinese IME event stream.
     await appendOpening(p,' 中文 [draft]');const edited=await snap(p);
     expect(edited.source).toBe(source.replace('Opening paragraph.','Opening paragraph. 中文 [draft]'));
-    await p.locator('#format-undo').click();await expect.poll(async()=>(await snap(p)).source).toBe(source);
-    await p.locator('#format-redo').click();await expect.poll(async()=>(await snap(p)).source).toBe(edited.source);
-    await p.locator('#editor .tiptap > p').first().click();await p.locator('#format-image').click();
+    await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap(p)).source).toBe(source);
+    await clickWorkspaceControl(p,'format-redo');await expect.poll(async()=>(await snap(p)).source).toBe(edited.source);
+    await p.locator('#editor .tiptap > p').first().click();await clickWorkspaceControl(p,'format-image');
     await app.evaluate(({dialog},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});},picture);
     await p.locator('#image-choose').click();await expect(p.locator('#image-href')).toHaveValue(/^markdown-image-/);
     await p.locator('#image-label').fill('合成图片');await p.locator('#image-apply').click();
     await expect(images(p)).toHaveCount(1);await expect.poll(()=>images(p).evaluate(n=>n.naturalWidth)).toBe(240);
     const withImage=await snap(p);expect(withImage.source).toContain(chapters);expect(withImage.source).toContain('<div>Protected synthetic HTML</div>');
-    await p.locator('#format-undo').click();await expect(images(p)).toHaveCount(0);
+    await clickWorkspaceControl(p,'format-undo');await expect(images(p)).toHaveCount(0);
     await expect.poll(async()=>(await snap(p)).source).toBe(edited.source);
-    await p.locator('#format-redo').click();await expect(images(p)).toHaveCount(1);
+    await clickWorkspaceControl(p,'format-redo');await expect(images(p)).toHaveCount(1);
     await expect.poll(async()=>(await snap(p)).source).toBe(withImage.source);
 
-    if(await p.locator('#document-outline').isHidden()) await p.locator('#toggle-document-outline').click();
+    if(await p.locator('#document-outline').isHidden()) await clickWorkspaceControl(p,'toggle-document-outline');
     await p.locator('#outline-filter').fill('chapter 160');await expect(p.locator('#outline-count')).toHaveText('1 / 201');
     await p.locator('#outline-filter').press('Enter');const scroll=await p.locator('#document-scroll').evaluate(n=>n.scrollTop);
     expect(scroll).toBeGreaterThan(10000);const beforeSource=await snap(p);
-    await p.locator('#show-source').click();await expect(p.locator('#source-editor .cm-content')).toBeVisible();
+    await clickWorkspaceControl(p,'show-source');await expect(p.locator('#source-editor .cm-content')).toBeVisible();
     await expect(p.locator('#source-metadata')).toContainText('CRLF');await expect(p.locator('#source-metadata')).toContainText('UTF-8 BOM');
     await p.locator('#select-source').click();await expect(p.locator('#source-editor .cm-content')).toBeFocused();
     await p.locator('#source-wrap').click();await p.keyboard.press('Escape');
@@ -96,7 +97,7 @@ test('broader writing: image, long navigation, source, export isolation and rest
     await p.locator(`[data-draft-id="${draftId}"]`).getByRole('button',{name:'恢复副本'}).click();
     await expect(images(p)).toHaveCount(1);await expect.poll(()=>images(p).evaluate(n=>n.naturalWidth)).toBe(240);
     const recovered=await snap(p);expect(recovered.source).toBe(laterSource);expect(recovered.confirmedCopy??null).toBeNull();expect(recovered.canUndo).toBe(false);
-    await p.locator('#show-source').click();await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');
+    await clickWorkspaceControl(p,'show-source');await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');
     await appendOpening(p,' 继续写作');await backup(p);
     expect(await fs.readFile(target)).toEqual(bytes);expect(await fs.readFile(original)).toEqual(originalBytes);expect(await fs.readFile(picture)).toEqual(png);
     await stop();expect(faults).toEqual([]);expect(requests).toEqual([]);passed=true;
