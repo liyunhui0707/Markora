@@ -1,6 +1,6 @@
-**Markora 0.82.0 candidate.** User selected Markora and authorized relocation to
-`/Users/liyunhui/Liyunhui/Github/Markora`, with the same GitHub repository renamed
-`liyunhui0707/Markora`. Keep the existing bundle ID and `Markdown Vault Document`
+**markora 0.82.1.** User selected markora and authorized relocation to
+`/Users/liyunhui/Liyunhui/Github/markora`, with the same GitHub repository renamed
+`liyunhui0707/markora`. Keep the existing bundle ID and `Markdown Vault Document`
 profile/recovery paths so naming does not strand drafts. CLI/MCP source is now
 `integrations/markora`; retain an installed `mdapp` compatibility command.
 Semantic previews are inert read-only atoms, separate from exact editable source
@@ -114,7 +114,7 @@ authority change. Reject failed performance experiments rather than weakening
 ownership tests; memory and profiler timings remain scoped observations.
 
 **Git workflow (2026-11-16).** The canonical local checkout is
-`/Users/liyunhui/Liyunhui/Github/Markora`; `main` is the integration
+`/Users/liyunhui/Liyunhui/Github/markora`; `main` is the integration
 branch. The former `markdown-vault-app-phase1b3` worktree is retired, not a
 development entry point. Keep the recovery checkpoint as a historical ref.
 Follow [Git management](docs/git-workflow.md): coherent tested checkpoints,

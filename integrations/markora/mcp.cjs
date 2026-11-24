@@ -5,8 +5,8 @@ const version=require('./package.json').version;
 const schema=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
 const nameSchema={type:'string',description:'固定 Inbox 内的 Markdown 文件名，不能包含目录或隐藏名称。',maxLength:240};
 const tools=[
- {name:'get_editor_status',description:'查询已安装 Markora App 的版本、进程状态与固定生成目录；不读取打开文档的正文。',inputSchema:schema({}),annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
- {name:'open_document',description:'将固定 Inbox 内明确指定的 .md 交给 Markora App。返回打开请求已提交，不代表正文已显示或保存。',inputSchema:schema({filename:nameSchema},['filename']),annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
+ {name:'get_editor_status',description:'查询已安装 markora App 的版本、进程状态与固定生成目录；不读取打开文档的正文。',inputSchema:schema({}),annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
+ {name:'open_document',description:'将固定 Inbox 内明确指定的 .md 交给 markora App。返回打开请求已提交，不代表正文已显示或保存。',inputSchema:schema({filename:nameSchema},['filename']),annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false}},
  {name:'create_document',description:'独占创建新的 UTF-8 Markdown，默认立即交给 App 显示。已有文件绝不覆盖。打开失败时保留新文件，并返回路径；不要重试创建，可调用 open_document。',inputSchema:schema({filename:nameSchema,markdown:{type:'string',maxLength:524289},open:{type:'boolean',default:true}},['filename','markdown']),annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false}},
 ];
 const protocolVersions=['2024-11-05','2025-03-26','2025-06-18','2025-11-25'];

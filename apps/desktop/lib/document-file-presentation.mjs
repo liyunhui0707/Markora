@@ -1,6 +1,6 @@
 // Display only. Exact main-owned baseline hashes distinguish file saving from backup.
 export function fileWindowTitle(current){
- if(!current)return 'Markora';
+ if(!current)return 'markora';
  return current.label+(current.temporary?(current.linkedFile?'':' — 草稿'):' — 只读');
 }
 export function filePresentation(current,state){

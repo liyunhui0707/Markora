@@ -1,8 +1,8 @@
 {
   "name": "markora-companion",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
-  "description": "Local CLI and stdio MCP companion for Markora",
+  "description": "Local CLI and stdio MCP companion for markora",
   "license": "MIT",
   "engines": {
     "node": ">=24"

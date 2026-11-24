@@ -1,19 +1,19 @@
-# Markora
+# markora
 
 一个本地 macOS Markdown 编辑器：从 Finder 打开文件，在简洁的正文界面写作，
 使用源码模式处理完整 Markdown，明确保存，并保留本地草稿和保存版本。
 不需要账号、Vault 或托管服务。
 
-当前版本为 **0.82.0**；发行状态、安装包及适用验收结果以
-[GitHub Releases](https://github.com/liyunhui0707/Markora/releases) 为准。
+当前版本为 **0.82.1**；发行状态、安装包及适用验收结果以
+[GitHub Releases](https://github.com/liyunhui0707/markora/releases) 为准。
 当前支持 Apple Silicon / arm64。本轮构建采用 ad-hoc 签名，未进行 Developer ID 签名和公证。
 
 ## 开始使用
 
-打开已安装的 `Markora.app`，以后可从 Dock 启动，无需进入工程目录或运行终端命令。
+打开已安装的 `markora.app`，以后可从 Dock 启动，无需进入工程目录或运行终端命令。
 安装与更新步骤见[安装、更新与回退](docs/install.md)。
 
-1. 点「新建」写草稿，或点「打开…」选择 `.md` 文件。Finder 的「打开方式」也支持 Markora。
+1. 点「新建」写草稿，或点「打开…」选择 `.md` 文件。Finder 的「打开方式」也支持 markora。
 2. 普通文件直接进入独立的编辑缓冲区。输入不会立即改写原文件；保存时才写回绑定目标。
    只读检查视图和无法建立安全保存绑定的文件仍保持只读，可创建编辑副本。
 3. 点击「保存」或按 `⌘S` 保存当前文档；未命名草稿直接选择名称和位置。
@@ -22,10 +22,10 @@
 4. 需要完整 Markdown 时打开「源码」，编辑后「应用并返回」，再按需要保存到文件。
    源码窗口里的 `⌘S` 会应用并保存当前文档；`⌘Enter` 和「应用并返回」仅应用到正文。
 
-`.md` 默认打开方式由你决定。需要更改时，在 Finder 的文件「显示简介」中选择 Markora，
+`.md` 默认打开方式由你决定。需要更改时，在 Finder 的文件「显示简介」中选择 markora，
 再选择「全部更改」。开发安装流程不自动抢占默认关联。
 
-需要由 AI 生成后立即打开文件，可使用独立的 [Markora CLI / MCP 伴侣](integrations/markora/README.md)：
+需要由 AI 生成后立即打开文件，可使用独立的 [markora CLI / MCP 伴侣](integrations/markora/README.md)：
 提供状态查询、打开明确文件、独占生成新 Markdown 并提交打开请求。
 伴侣需要 Node 24+，单独安装；图形 App 本身仍不需要 Node。
 `markora` 是主命令，旧的 `mdapp` 入口在本机升级时保留兼容。
@@ -122,7 +122,7 @@ OneDrive 保存会在目标目录保留隐藏恢复区，其中旧正文可能�
 仓库使用 Node **24.20.0**（mise 锁定），Electron 使用自己的运行时。
 从 `apps/desktop/` 执行，先阅读 [DEVELOPMENT.md](DEVELOPMENT.md) 与 [AGENTS.md](AGENTS.md)：
 
-本机统一开发入口为 `/Users/liyunhui/Liyunhui/Github/Markora`。
+本机统一开发入口为 `/Users/liyunhui/Liyunhui/Github/markora`。
 分支、检查点、CI 与版本标签约定见 [Git 管理](docs/git-workflow.md)。
 
 ```sh
