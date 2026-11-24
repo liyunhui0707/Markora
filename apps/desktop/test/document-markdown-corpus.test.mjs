@@ -64,3 +64,28 @@ test('reviewed divergences retain their exact product tree, including attributes
  }
  assert.equal(snapshots.length,213);
 });
+
+test('edit visible text in representative official examples and reopen with exact surrounding bytes',async()=>{
+ const {mapTextEdit}=await import('../lib/document-source-map.mjs');
+ const {findDocumentText}=await import('../lib/document-find-view.mjs');
+ const cases={
+   'commonmark-0.31.2':[[62,'foo'],[80,'bar'],[228,'Foo'],[350,'foo'],[482,'link'],[633,'baz']],
+   'gfm-0.29':[[198,'baz'],[200,'az'],[279,'bar'],[280,'bim'],[491,'Hi']],
+ };
+ for(const [suite,edits] of Object.entries(cases)){
+   const rows=readFileSync(new URL(suite+'.jsonl',fixtures),'utf8').trimEnd().split('\n').map(JSON.parse);
+   for(const [number,word] of edits){
+     const source=rows[number-1][0].replaceAll('\n','\r\n'),label=suite+' #'+number;
+     const doc=schema.nodeFromJSON(projectSource(source).doc);
+     const hit=findDocumentText(doc,word).matches[0];assert.ok(hit&&!hit.preview,label);
+     const change=mapTextEdit(source,{from:hit.from,to:hit.to,insert:'汉e\u0301😀'});
+     assert.ok(change.ok,label);
+     assert.equal(change.source,source.replace(word,'汉e\u0301😀'),label);
+     const reopened=schema.nodeFromJSON(projectSource(change.source).doc);reopened.check();
+     assert.equal(findDocumentText(reopened,'汉e\u0301😀').total,1,label);
+     const undo=change.inverseSource??{from:change.change.from,to:change.change.from+change.change.insert.length,
+       insert:source.slice(change.change.from,change.change.to)};
+     assert.equal(change.source.slice(0,undo.from)+undo.insert+change.source.slice(undo.to),source,label);
+   }
+ }
+});

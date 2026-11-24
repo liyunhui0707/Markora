@@ -75,7 +75,14 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
         await expect.poll(async()=>(await snapshot())?.source).toBe(source.replace('| 1 | 2 |','| 三 | 四 |'));
         await page.keyboard.press('Meta+z');
         await expect.poll(async()=>(await snapshot())?.source).toBe(source);
-        const quoted=editor.locator('blockquote li p').filter({hasText:'甲乙'});
+        const quoted=editor.locator('blockquote li p').first();
+        await place(quoted,1);await page.keyboard.type('*note*');
+        await expect(quoted.locator('em')).toHaveText('note');
+        await expect.poll(async()=>(await snapshot()).source).toBe(source.replace('甲乙','甲*note*乙'));
+        for(let i=0;i<6;i++){
+          const before=(await snapshot()).source;await page.keyboard.press('Meta+z');
+          await expect.poll(async()=>(await snapshot()).source).not.toBe(before);
+        }
         await place(quoted,1);await page.keyboard.press('Enter');
         await expect.poll(async()=>(await snapshot())?.source).toBe(source.replace('甲乙','甲\r\n> - 乙'));
         await page.keyboard.press('Backspace');
