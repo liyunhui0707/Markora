@@ -91,7 +91,24 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
         await place(last,'写作位置：'.length);
         let expected=source;
         for(const [raw,tag,value] of [['~~old~~','s','old'],['**bold**','strong','bold'],['*italic*','em','italic'],['`code`','code','code'],['[link](https://example.com)','[data-document-link]','link']]){
+          if(tag==='[data-document-link]'){
+            // Hold one read across real key events, as can happen during a catalog refresh
+            // or a snapshot on a slower main process. All format writes still go to main.
+            await app.evaluate(({ipcMain})=>{
+              const channel='document-demo:request',original=ipcMain._invokeHandlers.get(channel);
+              ipcMain.removeHandler(channel);
+              ipcMain.handle(channel,async(event,payload)=>{
+                const result=await original(event,payload);
+                if(payload.operation==='snapshot'&&!globalThis.releaseTypingRead)
+                  await new Promise(resolve=>{globalThis.releaseTypingRead=resolve;});
+                return result;
+              });
+            });
+            await page.evaluate(()=>{void window.documentDemo.snapshot({sessionId:document.querySelector('#documents').value});});
+            await expect.poll(()=>app.evaluate(()=>typeof globalThis.releaseTypingRead)).toBe('function');
+          }
           await page.keyboard.type(raw);
+          if(tag==='[data-document-link]')await app.evaluate(()=>globalThis.releaseTypingRead());
           expected+=raw;
           await expect.poll(async()=>(await snapshot())?.source).toBe(expected);
           await expect(last.locator(tag)).toHaveText(value);
