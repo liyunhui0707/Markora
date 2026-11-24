@@ -1,7 +1,7 @@
-# markora CLI 与 MCP 伴侣
+# Markora CLI 与 MCP 伴侣
 
-让 AI 或命令行生成 Markdown 后，立即交给已安装的 markora。伴侣工具为 0.2.1，
-配合 App 0.82.1；它独立于 App 安装包，不改变应用身份、草稿、保存权限或已发布 ZIP。
+让 AI 或命令行生成 Markdown 后，立即交给已安装的 Markora。伴侣工具为 0.2.1，
+配合 Markora 0.85.0；它独立于 App 安装包，不改变应用身份、草稿、保存权限或已发布 ZIP。
 
 ## 命令
 
@@ -30,7 +30,7 @@ App 仍通过原有的原生打开队列和输入保护处理请求，可能等�
 
 ## 安装
 
-需要 macOS、Node 24+、已安装的 markora，以及已经存在、归当前用户所有的普通 Inbox。
+需要 macOS、Node 24+、已安装的 Markora，以及已经存在、归当前用户所有的普通 Inbox。
 App 本身继续独立运行，不要求 Node。
 
 从仓库根目录执行：
@@ -47,7 +47,7 @@ node integrations/markora/install.cjs
 源码运行时可显式选择位置：
 
 ```sh
-node integrations/markora/cli.cjs --app "/path/markora.app" --inbox "/existing/Inbox" status
+node integrations/markora/cli.cjs --app "/path/Markora.app" --inbox "/existing/Inbox" status
 ```
 
 固定 Inbox 限当前用户主目录内、非隐藏、非敏感、不可被其他用户写入的普通目录。

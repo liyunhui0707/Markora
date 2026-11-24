@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy,closeDocumentApp}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -21,7 +22,7 @@ test('mixed inline authoring: native selection, batch replacement, export and re
  }
  async function stop(){if(app){await closeDocumentApp(app,{page,evidencePath:info.outputPath('close-diagnostic.json')});app=null;const result=await exit;exits.push(result);expect(result).toEqual({code:0,signal:null});}}
  try{
-  await launch();await page.locator('#empty-open').click();await page.locator('#show-document-find').click();await page.locator('#find-query').fill('alpha');
+  await launch();await page.locator('#empty-open').click();await clickWorkspaceControl(page,'show-document-find');await page.locator('#find-query').fill('alpha');
   await expect(page.locator('#find-replace-all')).toBeDisabled();await page.keyboard.press('Escape');
   await page.locator('#edit-copy').click();const initial=await snap();
   async function selectText(paragraph,word){await paragraph.click();await settleNativeCaret(paragraph);
@@ -36,22 +37,22 @@ test('mixed inline authoring: native selection, batch replacement, export and re
   const native=source.replace('**alpha** beta [safe]','**中文😀** [safe]');
   await expect.poll(async()=>(await snap()).source).toBe(native);
   await page.keyboard.insertText('X');await expect.poll(async()=>(await snap()).source).toBe(native.replace('中文😀','中文😀X'));
-  await page.locator('#format-undo').click();await expect.poll(async()=>(await snap()).source).toBe(native);
-  await page.locator('#format-undo').click();await expect.poll(async()=>(await snap()).source).toBe(source);
+  await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap()).source).toBe(native);
+  await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap()).source).toBe(source);
   for(const [locator,word,value,expected] of [
     [page.locator('#editor .tiptap > h1'),'alpha beta','题名',source.replace('alpha **beta**','题名')],
     [page.locator('#editor .tiptap > p').first(),'safe after','链接',source.replace('[safe](https://example.invalid "title") after','[链接](https://example.invalid "title")')],
   ]){
     await selectText(locator,word);await page.keyboard.insertText(value);
     await expect.poll(async()=>(await snap())?.source).toBe(expected);
-    await page.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source).toBe(source);
+    await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap())?.source).toBe(source);
   }
-  await page.locator('#show-document-find').click();await page.locator('#find-query').fill('alpha beta');await page.locator('#find-replacement').fill('中文😀');
+  await clickWorkspaceControl(page,'show-document-find');await page.locator('#find-query').fill('alpha beta');await page.locator('#find-replacement').fill('中文😀');
   await page.locator('#find-replace-all').click();
   const edited=source.replace('alpha **beta**','中文😀').replace('**alpha** beta','**中文😀**').replace('*alpha* beta','*中文😀*').replace('`alpha` beta','`中文😀`');
   await expect.poll(async()=>(await snap()).source).toBe(edited);await expect(page.locator('#find-replace-status')).toHaveText('已替换 4 处，可撤销。');
-  await page.keyboard.press('Escape');await page.locator('#format-undo').click();await expect.poll(async()=>(await snap()).source).toBe(source);
-  await page.locator('#format-redo').click();await expect.poll(async()=>(await snap()).source).toBe(edited);
+  await page.keyboard.press('Escape');await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap()).source).toBe(source);
+  await clickWorkspaceControl(page,'format-redo');await expect.poll(async()=>(await snap()).source).toBe(edited);
   const before=await snap();await expect.poll(async()=>{const s=await snap();return s.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);
   await app.evaluate(({dialog},file)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:file});dialog.showMessageBox=async()=>({response:1});},target);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);

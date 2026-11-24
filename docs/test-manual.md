@@ -1,5 +1,15 @@
 # Manual Test Checklist
 
+## MD-01 → MD-03 · Markdown candidate 0.84.0
+
+Use a disposable document with CRLF and compare saved bytes after undo and reopen.
+
+1. Open a ragged aligned table, a Setext heading, a thematic break and a metadata frame. Find visible text in the table and jump to the heading from the outline.
+2. Replace text in a reference label, strikethrough, escaped pipe cell and multi-backtick span. Split a paragraph containing an entity. Undo and compare exact original spelling.
+3. Open a document containing an inline formula, a Mermaid graph and a malformed graph. Double-click a preview, change its source and check its live preview. Cancel, then repeat and apply. Save, close and reopen.
+4. Follow a footnote to its definition and back. Follow a same-document Wiki heading reference. An unresolved target should report its status.
+5. Try a physical input method during block editing and use VoiceOver to traverse previews and the source dialog. These are manual checks. Their results must be recorded separately from automated keyboard or accessibility-tree checks.
+
 ## Complete document workflow — 0.81.0 candidate
 
 Use disposable local documents. These are proposed checks, not recorded passes.

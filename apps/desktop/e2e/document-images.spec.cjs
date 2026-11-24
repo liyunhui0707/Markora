@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
@@ -21,24 +22,24 @@ test('image references: panel, keyboard, history, exclusive export, reopen and r
  try{
   let p=await launch();await p.locator('#empty-open').click();await expect(image(p)).toHaveCount(1);await expect(p.locator('#editor .tiptap')).toHaveAttribute('contenteditable','false');
   await p.locator('#edit-copy').click();const source=()=>p.locator('#source').textContent(),check=async s=>expect.poll(source).toBe(s);
-  await selectedImage(p);await p.locator('#format-image').click();await expect(p.locator('#image-href')).toHaveValue('assets/old.png');
+  await selectedImage(p);await clickWorkspaceControl(p,'format-image');await expect(p.locator('#image-href')).toHaveValue('assets/old.png');
   await p.locator('#image-label').fill('cancelled');await p.locator('#image-cancel').click();await check(originalBytes.toString().slice(1));
-  await p.locator('#format-image').click();await p.locator('#image-label').fill('New diagram');await p.locator('#image-apply').click();
+  await clickWorkspaceControl(p,'format-image');await p.locator('#image-label').fill('New diagram');await p.locator('#image-apply').click();
   const edited=originalBytes.toString().slice(1).replace('![old]','![New diagram]');await check(edited);
   await p.keyboard.press('Meta+z');await check(originalBytes.toString().slice(1));await p.keyboard.press('Meta+Shift+z');await check(edited);
-  await p.locator('#format-image').click();await p.locator('#image-remove').click();await expect(image(p)).toHaveCount(0);await p.keyboard.press('Meta+z');await check(edited);expect(await fs.readFile(original)).toEqual(originalBytes);
-  await p.locator('#new-temporary').click();await p.locator('#editor p').click();await p.locator('#format-image').click();
+  await clickWorkspaceControl(p,'format-image');await p.locator('#image-remove').click();await expect(image(p)).toHaveCount(0);await p.keyboard.press('Meta+z');await check(edited);expect(await fs.readFile(original)).toEqual(originalBytes);
+  await p.locator('#new-temporary').click();await p.locator('#editor p').click();await clickWorkspaceControl(p,'format-image');
   await p.locator('#image-label').fill('流程图😀');await p.locator('#image-href').fill('javascript:alert(1)');await p.locator('#image-apply').click();await expect(p.locator('#image-error')).not.toBeEmpty();await check('');
   await p.locator('#image-href').fill('assets/my diagram.png');await p.locator('#image-form').dispatchEvent('compositionstart');await expect(p.locator('#image-apply')).toBeDisabled();await p.locator('#image-form').dispatchEvent('compositionend');
   await p.locator('#image-apply').click();let body='![流程图😀](<assets/my diagram.png>)';await check(body);await expect(image(p)).toContainText('未加载预览');
   await p.keyboard.press('Enter');await p.keyboard.type('After image.');body+='\n\nAfter image.';await check(body);
-  await p.locator('#format-image').click();await p.locator('#image-label').fill('Remote reference');await p.locator('#image-href').fill('https://example.test/diagram.png');await p.locator('#image-apply').click();body+='\n\n![Remote reference](<https://example.test/diagram.png>)';await check(body);
+  await clickWorkspaceControl(p,'format-image');await p.locator('#image-label').fill('Remote reference');await p.locator('#image-href').fill('https://example.test/diagram.png');await p.locator('#image-apply').click();body+='\n\n![Remote reference](<https://example.test/diagram.png>)';await check(body);
   await p.keyboard.press('Backspace');await expect(image(p)).toHaveCount(1);await p.keyboard.press('Meta+z');await check(body);
   await p.keyboard.press('Enter');await p.keyboard.type('Tail');body+='\n\nTail';await check(body);
-  await selectedImage(p,1);await p.locator('#format-image').click();await p.locator('#image-href').fill('https://example.test/new.png');await p.locator('#image-apply').click();body=body.replace('example.test/diagram','example.test/new');await check(body);
+  await selectedImage(p,1);await clickWorkspaceControl(p,'format-image');await p.locator('#image-href').fill('https://example.test/new.png');await p.locator('#image-apply').click();body=body.replace('example.test/diagram','example.test/new');await check(body);
   await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setSize(1000,780);w.showInactive();});
-  await p.screenshot({path:info.outputPath('image-cards.png')});await p.locator('#format-image').click();await p.screenshot({path:info.outputPath('image-panel.png')});await p.locator('#image-cancel').click();
-  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(780,720));await p.locator('#show-reading-settings').click();await p.locator('#reading-theme-dark').click();await p.locator('#close-reading-settings').click();await p.screenshot({path:info.outputPath('image-narrow-dark.png')});await p.locator('#format-image').click();await p.screenshot({path:info.outputPath('image-panel-dark.png')});await p.locator('#image-cancel').click();
+  await p.screenshot({path:info.outputPath('image-cards.png')});await clickWorkspaceControl(p,'format-image');await p.screenshot({path:info.outputPath('image-panel.png')});await p.locator('#image-cancel').click();
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(780,720));await clickWorkspaceControl(p,'show-reading-settings');await p.locator('#reading-theme-dark').click();await p.locator('#close-reading-settings').click();await p.screenshot({path:info.outputPath('image-narrow-dark.png')});await clickWorkspaceControl(p,'format-image');await p.screenshot({path:info.outputPath('image-panel-dark.png')});await p.locator('#image-cancel').click();
   expect(await p.evaluate(()=>document.body.scrollWidth<=innerWidth)).toBe(true);await expect(p.locator('#editor [src],#editor [href]')).toHaveCount(0);
   fixture=createHomeFixture('Writing-synthetic-E2E-');const target=path.join(fixture.dir,'Images.md');await app.evaluate(({dialog},target)=>{dialog.showSaveDialog=async()=>({canceled:false,filePath:target});},target);
   await createMarkdownCopy(p);await expect(p.locator('#open-confirmed-copy')).toBeVisible();
@@ -48,7 +49,7 @@ test('image references: panel, keyboard, history, exclusive export, reopen and r
   await p.locator('#open-confirmed-copy').click();await check(body);await expect(image(p)).toHaveCount(2);await expect(p.locator('#editor .tiptap')).toHaveAttribute('contenteditable','false');
   await stop();p=await launch();await p.locator('#show-drafts').click();await p.locator(`[data-draft-id="${draftId}"]`).getByRole('button',{name:'恢复副本'}).click();
   await expect.poll(()=>p.locator('#source').textContent()).toBe(body);await expect(image(p)).toHaveCount(2);const recovered=await current(p);expect(recovered.canUndo).toBe(false);expect(recovered.confirmedCopy??null).toBeNull();
-  await selectedImage(p);await p.locator('#format-image').click();await expect(p.locator('#image-href')).toHaveValue('assets/my diagram.png');await p.locator('#image-cancel').click();
+  await selectedImage(p);await clickWorkspaceControl(p,'format-image');await expect(p.locator('#image-href')).toHaveValue('assets/my diagram.png');await p.locator('#image-cancel').click();
   expect(await fs.readFile(original)).toEqual(originalBytes);expect(await fs.readFile(target)).toEqual(bytes);await stop();expect(faults).toEqual([]);expect(requests).toEqual([]);passed=true;
   await fs.writeFile(info.outputPath('evidence.json'),JSON.stringify({ok:true,root,exits,originalUnchanged:true,exportSha256:sha,exportRevision:exported.revision,requests,previewLoaded:false,nativeDialogs:'controlled',nativeIME:'NOT VERIFIED'},null,2));
  }finally{await stop();if(fixture)console.log('fixture:'+JSON.stringify(fixture.cleanup({passed,quiescent:!app})));}

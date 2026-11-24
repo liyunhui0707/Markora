@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const {createResourceProbe}=require('./helpers/document-resource-probe.cjs');
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
@@ -13,14 +14,14 @@ test('fixed draft reuse: repeated restore and close retain one record and releas
  try{
   await app.evaluate(({dialog,BrowserWindow},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});dialog.showMessageBox=async()=>({response:1});dialog.showMessageBoxSync=()=>1;const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1280,850);w.showInactive();},original);
   await expect(p.locator('#empty-open')).toBeEnabled();await p.locator('#empty-open').click();await p.locator('#edit-copy').click();await expect.poll(async()=>{const s=await snap();return s?.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);
-  await p.locator('#close-current-document').click();await expect(p.locator('#edit-copy')).toBeVisible();await p.locator('#close-current-document').click();await expect(p.locator('#empty-new')).toBeVisible();
+  await clickWorkspaceControl(p,'close-current-document');await expect(p.locator('#edit-copy')).toBeVisible();await clickWorkspaceControl(p,'close-current-document');await expect(p.locator('#empty-new')).toBeVisible();
   const drafts=await p.evaluate(async()=>window.documentDemo.listDrafts());expect(drafts.drafts).toHaveLength(1);const id=drafts.drafts[0].id;
   for(let cycle=0;cycle<8;cycle++){
    await p.locator('#show-drafts').click();await p.locator(`[data-draft-id="${id}"]`).getByRole('button',{name:'恢复副本'}).click();await expect.poll(async()=>(await snap())?.source).toBe(source);
    const current=await snap();expect(current.originalSave).toBeNull();expect(current.linkedFile).toBeNull();
-   await p.locator('#show-source').click();await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');
+   await clickWorkspaceControl(p,'show-source');await expect(p.locator('#source-editor .cm-content')).toBeVisible();await p.keyboard.press('Escape');
    await expect.poll(async()=>{const s=await snap();return s?.draftBackup?.state==='backed-up'&&s.draftBackup.revision===s.revision;}).toBe(true);
-   await p.locator('#close-current-document').click();await expect(p.locator('#empty-new')).toBeVisible();await expect(p.locator('#editor .tiptap')).toHaveCount(0);await expect(p.locator('#source-editor .cm-editor')).toHaveCount(0);await expect(p.locator('#documents option')).toHaveCount(0);
+   await clickWorkspaceControl(p,'close-current-document');await expect(p.locator('#empty-new')).toBeVisible();await expect(p.locator('#editor .tiptap')).toHaveCount(0);await expect(p.locator('#source-editor .cm-editor')).toHaveCount(0);await expect(p.locator('#documents option')).toHaveCount(0);
    expect((await p.evaluate(async()=>window.documentDemo.listDrafts())).drafts.map(d=>d.id)).toEqual([id]);
    expect((await p.evaluate(async sessionId=>window.documentDemo.snapshot({sessionId}),current.sessionId)).ok).toBe(false);
    samples.push({cycle,...await probe.sample({collect:true})});

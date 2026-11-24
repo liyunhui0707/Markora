@@ -1,6 +1,35 @@
 import { TextSelection } from '@tiptap/pm/state';
 import { mapFormatEdit } from './document-format-edit.mjs';
 
+// Intercept only native caret input whose DOM selection and advertised input
+// target both agree with the current ProseMirror paragraph end.
+export function applyInlineTyping(view,event,{state,blocked}){
+  if(blocked||!state||!event.isTrusted||event.defaultPrevented||!event.cancelable
+      ||event.inputType!=='insertText'||!event.data||event.isComposing||view.composing||event.keyCode===229
+      ||!view.editable||!view.hasFocus()||state.confirmed.readOnly||state.composing||state.compositionInvalid
+      ||state.historyPending||state.locked||state.recoveryRecords.length)return false;
+  const {selection,storedMarks}=view.state, pos=selection.$from;
+  if(!(selection instanceof TextSelection)||!selection.empty||pos.depth!==1
+      ||pos.parent.type.name!=='paragraph'||pos.parentOffset!==pos.parent.content.size)return false;
+  const closing=/^[*_~`)]$/.test(event.data);
+  const continued=storedMarks?.length===0&&pos.nodeBefore?.marks.length>0;
+  if(!closing&&!continued)return false;
+  const dom=view.dom.ownerDocument.getSelection(),ranges=event.getTargetRanges?.();
+  if(!dom?.isCollapsed||dom.rangeCount!==1||ranges?.length!==1)return false;
+  const target=ranges[0];
+  if(!view.dom.contains(dom.anchorNode)||dom.anchorNode!==target.startContainer||dom.anchorOffset!==target.startOffset
+      ||target.endContainer!==target.startContainer||target.endOffset!==target.startOffset
+      ||view.posAtDOM(dom.anchorNode,dom.anchorOffset)!==selection.from)return false;
+  const command={action:closing?'inline-close':'inline-after',from:selection.from,to:selection.to,insert:event.data};
+  let plan=mapFormatEdit(state.source,command);
+  if(!plan.ok&&closing&&continued){command.action='inline-after';plan=mapFormatEdit(state.source,command);}
+  if(!plan.ok)return false;
+  const doc=view.state.schema.nodeFromJSON(plan.projection.doc);
+  const tr=view.state.tr.replaceWith(0,view.state.doc.content.size,doc.content);
+  tr.setSelection(TextSelection.create(tr.doc,plan.selection.from)).setStoredMarks([]).setMeta('document-block-shortcut',command);
+  event.preventDefault();view.dispatch(tr.scrollIntoView());return true;
+}
+
 // Synchronous optimistic typing, queued through the same main-owned revision
 // and history path as toolbar commands. Never serialize the editor to Markdown.
 export function applyBlockShortcut(view, event, context) {

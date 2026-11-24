@@ -23,7 +23,7 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
       const open = id === 'toggle-session-sidebar' && byId('writing-app').dataset.sidebar !== 'open';
       sidebar(open);
       if (!open) byId('toggle-session-sidebar').focus();
-      else byId('session-filter').focus();
+      else (byId('session-filter-label').hidden ? byId('new-temporary') : byId('session-filter')).focus();
     };
   }
   byId('document-sidebar').addEventListener('pointerdown', event => { if (blocked()) event.preventDefault(); });
@@ -57,13 +57,19 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
   });
   const info = byId('document-info'), doc = info.ownerDocument, title = info.querySelector('summary');
   const canDismissTitle = () => enabled && info.open && !blocked() && !doc.querySelector('dialog[open]');
+  const actions = byId('file-actions');
+  function dismissActions(event) {
+    if (actions.open && !event.defaultPrevented && !actions.contains(event.target) && !doc.querySelector('dialog[open]')) actions.open = false;
+  }
+  doc.addEventListener('focusin', dismissActions);
   doc.addEventListener('pointerdown', event => {
-    // Close only this disclosure; let the destination receive its normal click/focus.
-    if(!event.defaultPrevented&&!byId('file-actions').contains(event.target))byId('file-actions').open=false;
+    dismissActions(event);
     if (!event.defaultPrevented && canDismissTitle() && !info.contains(event.target)) info.open = false;
   }, true);
   doc.addEventListener('keydown', event => {
-    if(event.key==='Escape'&&byId('file-actions').open&&!event.isComposing){byId('file-actions').open=false;byId('file-actions-toggle').focus();event.preventDefault();return;}
+    if (event.key === 'Escape' && actions.open && !event.isComposing && event.keyCode !== 229 && !doc.querySelector('dialog[open]')) {
+      actions.open = false; byId('file-actions-toggle').focus(); event.preventDefault(); return;
+    }
     if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || event.keyCode === 229 || !canDismissTitle()) return;
     const returnFocus = info.contains(doc.activeElement);
     event.preventDefault(); event.stopPropagation(); info.open = false;
@@ -103,13 +109,16 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
         rows.set(id, { button, label, detail }); list.append(button);
       }
       const { button, label, detail } = rows.get(id), m = metadata.get(id);
-      label.textContent = option.textContent; button.title = option.textContent;
+      label.textContent = option.textContent;
       button.setAttribute('aria-current', String(id === confirmed?.sessionId));
       button.disabled = !!((c.run?(c.loading||(c.state?.locked&&!canNavigatePaused(c.state))||c.state?.compositionInvalid||c.state?.historyPending):blocked()) || select.disabled || c.unavailable?.(id));
       detail.textContent = c.unavailable?.(id) ? '会话已不可用' : c.pendingSession === id ? '正在切换…'
         : m?.detail || (m?.temporary ? '独立草稿' : m?.readOnly ? '原文只读' : '已打开文档');
+      detail.hidden = !c.unavailable?.(id) && c.pendingSession !== id;
+      button.title = option.textContent + ' · ' + detail.textContent;
       button.hidden = !option.textContent.toLocaleLowerCase().includes(byId('session-filter').value.trim().toLocaleLowerCase());
     }
+    byId('session-filter-label').hidden = options.length < 2 && !byId('session-filter').value;
     byId('session-count').textContent = String(options.length);
     byId('session-empty').hidden = [...rows.values()].some(r => !r.button.hidden);
     byId('session-empty').textContent = options.length ? '没有匹配的已打开文档。' : '打开一份文档，或从新的草稿开始。';
@@ -119,21 +128,22 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
     const s = context().state, current = s?.confirmed;
     byId('writing-status').hidden = !s;
     byId('copy-feedback').hidden=byId('copy-summary-compact').hidden&&byId('confirmed-copy-actions').hidden;
-    byId('file-actions').hidden=!s?.confirmed?.persistentCopyEnabled;
+    byId('file-actions').hidden=false;
+    byId('show-format-tools').hidden=!current?.temporary || !!current.readOnly;
+    byId('show-format-tools').disabled=!!blocked();
     const destination=s?.confirmed?.persistentCopyEnabled?byId('file-actions-content'):byId('writing-actions');
     for(const id of ['create-test-copy','export-copy'])if(byId(id).parentElement!==destination)destination.append(byId(id));
     byId('show-drafts').disabled = !!blocked() || byId('draft-recovery-panel').hidden;
     byId('show-details').disabled = !!blocked() || !s;
     byId('empty-new').disabled = !!blocked() || byId('new-temporary').disabled;
     for (const id of ['toggle-session-sidebar', 'close-session-sidebar', 'session-filter', 'sidebar-scrim']) byId(id).disabled = !!(context().loading||s?.historyPending||s?.compositionInvalid||s?.composing);
-    byId('reading-mode').hidden = !current?.readOnly;
     // A confirmed snapshot can be presented many times while later keys are in flight.
     let count = characterCounts.get(current);
     if (current && count === undefined) {
       count = current.source.replace(/\s/gu, '').length.toLocaleString();
       characterCounts.set(current, count);
     }
-    byId('document-statistics').textContent = current ? count + ' 字符 · Markdown' : 'Markdown';
+    byId('document-statistics').textContent = current ? count + ' 字符' : '';
     if (current?.sessionId !== previousSession) {
       byId('document-scroll').scrollTop = 0;
       byId('session-filter').value = '';
@@ -159,7 +169,10 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
     byId('header-start').append(byId('document-info'));
     byId('header-end').prepend(byId('writing-actions'));
     byId('writing-actions').append(byId('file-actions'));
-    byId('writing-workspace').prepend(byId('document-header'));
+    byId('writing-app').prepend(byId('document-header'));
+    byId('file-actions-content').append(byId('reading-tools'), byId('show-details'), byId('close-current-document'));
+    byId('writing-status').prepend(byId('reading-mode'));
+    byId('reading-mode').hidden = true;
     byId('writing-toolbar').prepend(byId('format-toolbar'));
     byId('copy-feedback').append(byId('copy-summary-compact'),byId('confirmed-copy-actions'));
     byId('document-scroll').append(byId('native-open-panel'), byId('original-save-status'), byId('copy-feedback'), byId('copy-operation-alert'), byId('viewer-status'), byId('input-alerts'), byId('empty-state'), byId('editor'));

@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {closeDocumentApp}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -30,11 +31,11 @@ test('controlled input lifecycle: composed text, cancellation and history across
    const backupDuring=await snap();expect(backupDuring.draftBackup.revision).toBe(before.revision);await p.keyboard.press('F6');await expect(p.locator('#editor .tiptap')).toBeFocused();
    await cdp.send('Input.insertText',{text:'模型😀'});await idle();const expected=source.replace(text,text.slice(0,2)+'模型😀'+text.slice(2));
    expect((await snap()).source).toBe(expected);expect((await snap()).revision).toBe(before.revision+1);await backup();
-   await p.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source).toBe(source);await p.locator('#format-redo').click();await expect.poll(async()=>(await snap())?.source).toBe(expected);await p.locator('#format-undo').click();await expect.poll(async()=>(await snap())?.source).toBe(source);await backup();
+   await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap())?.source).toBe(source);await clickWorkspaceControl(p,'format-redo');await expect.poll(async()=>(await snap())?.source).toBe(expected);await clickWorkspaceControl(p,'format-undo');await expect.poll(async()=>(await snap())?.source).toBe(source);await backup();
    await caret(node);const cancelled=await snap();await cdp.send('Input.imeSetComposition',{text:'cancel',selectionStart:6,selectionEnd:6});await cdp.send('Input.imeSetComposition',{text:'',selectionStart:0,selectionEnd:0});await idle();
    const after=await snap();expect(after.source).toBe(source);expect(after.revision).toBe(cancelled.revision);expect(after.canRedo).toBe(cancelled.canRedo);evidence.cases.push({selector,text,commitOneRevision:true,exactUndoRedo:true,cancelNoOp:true});
   }
-  await p.locator('#show-source').click();const cm=p.locator('#source-editor .cm-content');await cm.click();await p.keyboard.press('Meta+End');
+  await clickWorkspaceControl(p,'show-source');const cm=p.locator('#source-editor .cm-content');await cm.click();await p.keyboard.press('Meta+End');
   await cdp.send('Input.imeSetComposition',{text:'yuanma',selectionStart:6,selectionEnd:6});await expect(p.locator('#apply-source')).toBeDisabled();expect((await snap()).source).toBe(source);
   await cdp.send('Input.imeSetComposition',{text:'',selectionStart:0,selectionEnd:0});await expect(p.locator('#apply-source')).toBeEnabled();await p.keyboard.press('Escape');await expect(p.locator('#source-dialog')).toBeHidden();expect((await snap()).source).toBe(source);
   expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);expect(faults).toEqual([]);expect(network).toEqual([]);evidence.sourceCancellation=true;evidence.passed=true;

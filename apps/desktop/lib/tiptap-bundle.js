@@ -36937,7 +36937,7 @@ ${prefix}
     toMarkdownExtensions.push(mathToMarkdown(settings));
   }
 
-  // lib/remark-math-delimiters.js
+  // lib/document-math-delimiters.mjs
   function remarkMathDelimiters() {
     remarkMath.call(this);
     const data = this.data();

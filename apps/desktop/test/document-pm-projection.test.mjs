@@ -15,7 +15,7 @@ test('equal child counts still reject an unmerged PM text run',()=>{
  assert(matchesPMProjection(schema.nodeFromJSON(json),json));
 });
 test('nested preview attribute arrays compare their complete length as well as values',()=>{
- const json=projectSource('Escape \\*text\\* &amp;.').doc,pm=schema.nodeFromJSON(json),changed=structuredClone(json);
+ const json=projectSource('---').doc,pm=schema.nodeFromJSON(json),changed=structuredClone(json);
  changed.content[0].attrs.tree.children.length++;
  assert(!matchesPMProjection(pm,changed));
 });

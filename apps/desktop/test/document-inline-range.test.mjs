@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getSchema } from '@tiptap/core';
-import StarterKit from '@tiptap/starter-kit';
+import {documentEditorExtensions} from '../lib/document-editor-extensions.mjs';
 import { EditorState, TextSelection } from '@tiptap/pm/state';
 import { projectSource, mapTextEdit } from '../lib/document-source-map.mjs';
-const schema = getSchema([StarterKit.configure({ undoRedo:false, trailingNode:false })]);
+const schema = getSchema(documentEditorExtensions());
 const source = 'Alpha **bold** omega.';
 const edit = (raw, from, to, insert) => mapTextEdit(raw, {from,to,insert});
 

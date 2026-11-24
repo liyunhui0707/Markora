@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
@@ -15,7 +16,7 @@ test('cross-volume writing: open, exact save/history, local and external recover
   // Select another session and back through the public UI to refresh its controller.
   await page.locator('#new-temporary').click();await page.locator(`.session-row[data-session-id="${initial.sessionId}"]`).click();await expect.poll(async()=>(await snap(page))?.draftBackup?.state).toBe('backed-up');
   const current=await snap(page);await page.locator('#save-original').click();await expect.poll(async()=>(await snap(page))?.dirty).toBe(false);expect(await fs.readFile(original)).toEqual(Buffer.from('\ufeff'+current.source));
-  await page.locator('#format-undo').click();await expect.poll(async()=>(await snap(page))?.dirty).toBe(true);await page.locator('#format-redo').click();await expect.poll(async()=>(await snap(page))?.dirty).toBe(false);
+  await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap(page))?.dirty).toBe(true);await clickWorkspaceControl(page,'format-redo');await expect.poll(async()=>(await snap(page))?.dirty).toBe(false);
   await page.locator('#show-drafts').click();await expect(page.getByRole('button',{name:'查看目标卷恢复区'})).toHaveCount(1);await page.getByRole('button',{name:'查看目标卷恢复区'}).click();expect((await app.evaluate(()=>global.reveals))[0]).toContain('.markdown-recovery-');await page.screenshot({path:info.outputPath('cross-volume-recovery.png')});
   await page.locator('#close-draft-dialog').click();await createMarkdownCopy(page);await expect.poll(async()=>(await snap(page))?.confirmedCopy?.filePath).toBe(target);expect(await fs.readFile(target)).toEqual(Buffer.from('\ufeff'+current.source));expect(errors).toEqual([]);passed=true;
  }finally{if(app)await app.close();await fs.writeFile(info.outputPath('cross-volume-ui.json'),JSON.stringify({passed,root,dir,errors,dialogs:'controlled',physicalInput:'NOT TESTED'},null,2));}

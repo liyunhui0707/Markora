@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
 
@@ -63,7 +64,7 @@ test('input queue saturation keeps recovery visible until explicit acknowledgeme
     await page.evaluate(id=>{const n=document.querySelector('#documents');n.value=id;n.dispatchEvent(new Event('change'));},session);
     await expect(panel).toBeVisible();await expect(page.locator('#input-pressure-ack')).not.toBeChecked();
     await expect(page.locator('#input-pressure-resume')).toBeDisabled();
-    await page.locator('#show-reading-settings').click();await page.locator('#reading-theme-dark').click();await page.locator('#close-reading-settings').click();
+    await clickWorkspaceControl(page,'show-reading-settings');await page.locator('#reading-theme-dark').click();await page.locator('#close-reading-settings').click();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(780,720));
     expect(await panel.evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
     await page.screenshot({path:info.outputPath('pressure-dark-narrow.png')});
@@ -72,8 +73,8 @@ test('input queue saturation keeps recovery visible until explicit acknowledgeme
     expect((await snapshot()).source).toBe('a'.repeat(64));
     await editor.click();await page.keyboard.press('End');await page.keyboard.type('Z');
     await expect.poll(async()=>(await snapshot()).source).toBe('a'.repeat(64)+'Z');
-    await page.locator('#format-undo').click();await expect.poll(async()=>(await snapshot()).source).toBe('a'.repeat(64));
-    await page.locator('#format-redo').click();await expect.poll(async()=>(await snapshot()).source).toBe('a'.repeat(64)+'Z');
+    await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snapshot()).source).toBe('a'.repeat(64));
+    await clickWorkspaceControl(page,'format-redo');await expect.poll(async()=>(await snapshot()).source).toBe('a'.repeat(64)+'Z');
     expect(await app.evaluate(()=>globalThis.pressureGate.edits)).toBe(65);expect(faults).toEqual([]);
     await fs.writeFile(info.outputPath('evidence.json'),JSON.stringify({ok:true,root,acceptedBeforePause:64,retainedFirstRefused:'Z',
       automaticRetry:false,explicitAcknowledgement:true,sessionSwitchPreserved:true,history:true,nativeIME:'NOT VERIFIED'},null,2));

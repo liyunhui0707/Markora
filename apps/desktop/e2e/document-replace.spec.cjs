@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
 test('document replace: atomic batch, history, guarded structures, composition and restart',async({},info)=>{
@@ -17,17 +18,17 @@ test('document replace: atomic batch, history, guarded structures, composition a
  }
  async function stop(){if(app){await app.close();app=null;const result=await exit;exits.push(result);expect(result).toEqual({code:0,signal:null});}}
  try{
-  await launch();await page.locator('#empty-open').click();await page.locator('#show-document-find').click();await page.locator('#find-query').fill('alpha');
+  await launch();await page.locator('#empty-open').click();await clickWorkspaceControl(page,'show-document-find');await page.locator('#find-query').fill('alpha');
   await expect(page.locator('#find-replace-all')).toBeDisabled();await page.keyboard.press('Escape');
   await page.locator('#edit-copy').click();const initial=await snap();
-  await page.locator('#show-document-find').click();await page.locator('#find-query').fill('alpha');await page.locator('#find-replacement').fill('中文😀');
+  await clickWorkspaceControl(page,'show-document-find');await page.locator('#find-query').fill('alpha');await page.locator('#find-replacement').fill('中文😀');
   await page.locator('#find-replace-all').click();const edited=source.replace(/alpha/g,(s,at)=>source.slice(at-8,at)==='https://'?s:'中文😀');
   await expect.poll(async()=>(await snap()).source).toBe(edited);expect((await snap()).revision).toBe(initial.revision+1);
   await expect(page.locator('#find-replace-status')).toHaveText('已替换 6 处，可撤销。');
   await page.keyboard.press('Escape');await expect(page.locator('#editor .tiptap')).toBeFocused();
-  await page.locator('#format-undo').click();await expect.poll(async()=>(await snap()).source).toBe(source);
-  await page.locator('#format-redo').click();await expect.poll(async()=>(await snap()).source).toBe(edited);
-  await page.locator('#show-document-find').click();await page.locator('#find-query').fill('中文😀');await page.locator('#find-replacement').fill('beta');
+  await clickWorkspaceControl(page,'format-undo');await expect.poll(async()=>(await snap()).source).toBe(source);
+  await clickWorkspaceControl(page,'format-redo');await expect.poll(async()=>(await snap()).source).toBe(edited);
+  await clickWorkspaceControl(page,'show-document-find');await page.locator('#find-query').fill('中文😀');await page.locator('#find-replacement').fill('beta');
   await page.locator('#find-replace-one').click();await expect.poll(async()=>(await snap()).source).toBe(edited.replace('中文😀','beta'));
   await page.locator('#find-replacement').dispatchEvent('compositionstart',{data:''});await expect(page.locator('#find-replace-all')).toBeDisabled();await page.keyboard.press('Escape');await expect(page.locator('#document-find')).toBeVisible();await page.locator('#find-replacement').dispatchEvent('compositionend',{data:''});
   await page.locator('#find-replacement').fill('**bold**');const before=await snap();await page.locator('#find-replace-all').click();await expect(page.locator('#find-replace-status')).toContainText('本次未替换');expect((await snap()).source).toBe(before.source);

@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {focusNativeWindow,settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -40,21 +41,21 @@ test('formatted prose range workflow: native replacement, plain paste, joins, hi
   await select(prose('First '),'bold',1,prose('Second '),'link',2,true);await page.keyboard.insertText('新😀');
   const replacement='First **b新😀**[nk](../guide.md "keep title") tail.';
   expected=source.replace(first+nl+nl+second,replacement);await check();const changed=expected;
-  await page.locator('#format-undo').click();expected=source;await check();await page.locator('#format-redo').click();expected=changed;await check();await page.locator('#format-undo').click();expected=source;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();await clickWorkspaceControl(page,'format-redo');expected=changed;await check();await clickWorkspaceControl(page,'format-undo');expected=source;await check();
   await select(prose('First '),'bold',1,prose('Second '),'link',2,true);await page.keyboard.press('Backspace');expected=source.replace(first+nl+nl+second,'First **b**[nk](../guide.md "keep title") tail.');await check();
-  await page.locator('#format-undo').click();expected=source;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();
   await select(prose('First '),'bold',1,prose('Second '),'link',2);await prose('First ').evaluate(node=>{
    const event=new Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{files:[],types:['text/plain','text/html'],getData:type=>type==='text/plain'?'一段\r\n二段😀':(()=>{throw Error('clipboard HTML read');})()}});node.dispatchEvent(event);
   });
   const pasted='First **b**一段'+nl+nl+'二段😀[nk](../guide.md "keep title") tail.';expected=source.replace(first+nl+nl+second,pasted);await check();const afterPaste=expected;
-  await page.locator('#format-undo').click();expected=source;await check();await page.locator('#format-redo').click();expected=afterPaste;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();await clickWorkspaceControl(page,'format-redo');expected=afterPaste;await check();
   await select(prose('二段'),'二段😀',4);await page.keyboard.insertText('继续');expected=expected.replace('二段😀','二段😀继续');await check();const beforeJoin=expected;
   await select(prose('二段'),'二段😀',0);await page.keyboard.press('Backspace');expected=beforeJoin.replace('一段'+nl+nl+'二段','一段二段');await check();
-  await page.locator('#format-undo').click();expected=beforeJoin;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=beforeJoin;await check();
   await select(prose('First '),'一段',2);await page.keyboard.press('Delete');expected=beforeJoin.replace('一段'+nl+nl+'二段','一段二段');await check();
-  await page.locator('#format-undo').click();expected=beforeJoin;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=beforeJoin;await check();
   await page.screenshot({path:info.outputPath('formatted-prose.png')});expect(await page.locator('#editor .tiptap a[href]').count()).toBe(0);
-  await page.locator('#show-source').click();await expect(page.locator('#source-editor .cm-content')).toContainText('[nk](../guide.md "keep title")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
+  await clickWorkspaceControl(page,'show-source');await expect(page.locator('#source-editor .cm-content')).toContainText('[nk](../guide.md "keep title")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
   await page.locator('#save-original').click();await expect.poll(async()=>(await snap())?.dirty).toBe(false);expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);expect(await fs.readFile(target,'utf8')).toBe('\ufeff'+expected);await backup();const saved=await snap(),id=await page.evaluate(async label=>(await window.documentDemo.listDrafts()).drafts.find(d=>d.label===label).id,saved.label);
   await stop();await launch();await page.locator('#show-drafts').click();await page.locator(`[data-draft-id="${id}"]`).getByRole('button',{name:'恢复副本'}).click();await check();expect((await snap()).originalSave).toBeNull();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);expect(errors).toEqual([]);expect(network).toEqual([]);passed=true;

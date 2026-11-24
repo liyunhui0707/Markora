@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const { test, expect, _electron } = require('@playwright/test');
 const fs = require('node:fs/promises'), path = require('node:path'), os = require('node:os'), crypto = require('node:crypto');
 
@@ -30,12 +31,12 @@ test('long article: filtered outline, readonly exact source and return to writin
     await expect(page.locator('#empty-open')).toBeEnabled();
     const start=Date.now(); await page.locator('#empty-open').click();
     await expect(page.locator('#outline-list button')).toHaveCount(201); metrics.openMs=Date.now()-start;
-    if (await page.locator('#document-outline').isHidden()) await page.locator('#toggle-document-outline').click();
+    if (await page.locator('#document-outline').isHidden()) await clickWorkspaceControl(page,'toggle-document-outline');
     const before = await snapshot(); expect(before.source).toBe(source); expect(before.bom).toBe(true);
     await page.locator('#outline-filter').fill('chapter 160'); await expect(page.locator('#outline-count')).toHaveText('1 / 201');
     await page.locator('#outline-filter').press('Enter');
     const scrollBefore=await page.locator('#document-scroll').evaluate(n=>n.scrollTop); expect(scrollBefore).toBeGreaterThan(10000);
-    await page.locator('#show-source').click(); await expect(page.locator('#source-dialog')).toBeVisible();
+    await clickWorkspaceControl(page,'show-source'); await expect(page.locator('#source-dialog')).toBeVisible();
     expect(await page.locator('#source-text').textContent()).toBe(source);
     await expect(page.locator('#source-metadata')).toContainText('CRLF');
     await expect(page.locator('#source-metadata')).toContainText('UTF-8 BOM');
@@ -63,19 +64,19 @@ test('long article: filtered outline, readonly exact source and return to writin
     await page.locator('#editor h1').click(); await page.keyboard.press('Home'); await page.keyboard.type('X');
     await expect(page.locator('#source')).toContainText('X');
     const edited=await snapshot(); const editStart=Date.now();
-    await page.locator('#show-source').click(); await expect(page.locator('#source-editor .cm-content')).toBeVisible();
+    await clickWorkspaceControl(page,'show-source'); await expect(page.locator('#source-editor .cm-content')).toBeVisible();
     metrics.sourceOpenMs=Date.now()-editStart;
-    await page.keyboard.press('Escape'); await page.locator('#format-undo').click();
+    await page.keyboard.press('Escape'); await clickWorkspaceControl(page,'format-undo');
     await expect.poll(async()=> (await snapshot()).source).toBe(source);
-    await page.locator('#format-redo').click(); await expect.poll(async()=> (await snapshot()).source).toBe(edited.source);
-    await page.locator('#show-reading-settings').click(); await page.locator('#reading-theme-dark').click(); await page.locator('#close-reading-settings').click();
+    await clickWorkspaceControl(page,'format-redo'); await expect.poll(async()=> (await snapshot()).source).toBe(edited.source);
+    await clickWorkspaceControl(page,'show-reading-settings'); await page.locator('#reading-theme-dark').click(); await page.locator('#close-reading-settings').click();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(780,720));
     expect(await page.locator('#writing-toolbar').evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
-    await page.locator('#show-source').click();
+    await clickWorkspaceControl(page,'show-source');
     expect(await page.locator('#source-dialog').evaluate(n=>n.scrollWidth<=n.clientWidth && n.scrollHeight<=n.clientHeight)).toBe(true);
     await page.screenshot({path:info.outputPath('source-dark-narrow.png')}); await page.keyboard.press('Escape');
     await page.locator('#new-temporary').click(); await expect(page.locator('#outline-list button')).toHaveCount(0);
-    await page.locator('#show-source').click(); expect(await page.locator('#source-text').textContent()).toBe('');
+    await clickWorkspaceControl(page,'show-source'); expect(await page.locator('#source-text').textContent()).toBe('');
     await page.keyboard.press('Escape');
     await page.locator('#editor .tiptap').dispatchEvent('compositionstart',{data:''});
     try {

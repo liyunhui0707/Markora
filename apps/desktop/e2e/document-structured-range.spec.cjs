@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {focusNativeWindow,settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -40,25 +41,25 @@ test('structured range workflow: formatted task/list/quote selection, sibling pa
  try{
   await launch();await page.locator('#empty-open').click();await check();
   await select(item('Before '),'word',1,item('End link'),'link',2,true);await page.keyboard.insertText('新😀');expected=source.replace(list,'- [X] Before **w新😀**[**nk** plain](../guide.md "keep title")');await check();const typed=expected;
-  await page.locator('#format-undo').click();expected=source;await check();await page.locator('#format-redo').click();expected=typed;await check();await page.locator('#format-undo').click();expected=source;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();await clickWorkspaceControl(page,'format-redo');expected=typed;await check();await clickWorkspaceControl(page,'format-undo');expected=source;await check();
   await select(item('Before '),'word',1,item('End link'),'link',2);await page.keyboard.press('Delete');expected=source.replace(list,'- [X] Before **w**[**nk** plain](../guide.md "keep title")');await check();
-  await page.locator('#format-undo').click();expected=source;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();
   await select(item('Before '),'word',1,item('End link'),'link',2,true);await paste(item('Before '),'One\r\nTwo😀');
   const pasted='- [X] Before **w**One'+nl+'- [ ] Two😀[**nk** plain](../guide.md "keep title")';expected=source.replace(list,pasted);await check();const savedPaste=expected;
-  await page.locator('#format-undo').click();expected=source;await check();await page.locator('#format-redo').click();expected=savedPaste;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=source;await check();await clickWorkspaceControl(page,'format-redo');expected=savedPaste;await check();
   await expect(page.locator('#editor .tiptap > ul > li > .document-task-toggle').nth(0)).toHaveAttribute('aria-checked','true');await expect(page.locator('#editor .tiptap > ul > li > .document-task-toggle').nth(1)).toHaveAttribute('aria-checked','false');
   await select(item('Two😀'),'Two😀',5);await page.keyboard.insertText('继续');expected=expected.replace('Two😀','Two😀继续');await check();
-  const beforeTaskJoin=expected;await select(item('Two😀'),'Two😀',0);await page.keyboard.press('Backspace');expected=beforeTaskJoin.replace('One'+nl+'- [ ] Two😀','OneTwo😀');await check();await page.locator('#format-undo').click();expected=beforeTaskJoin;await check();
+  const beforeTaskJoin=expected;await select(item('Two😀'),'Two😀',0);await page.keyboard.press('Backspace');expected=beforeTaskJoin.replace('One'+nl+'- [ ] Two😀','OneTwo😀');await check();await clickWorkspaceControl(page,'format-undo');expected=beforeTaskJoin;await check();
   await select(quoted('Before '),'quote',1,quoted('End label'),'label',2,true);await paste(quoted('Before '),'引用一\n引用二');
   const pastedQuote='> Before **q**引用一'+nl+'> '+nl+'> 引用二[**bel** plain](quote "keep quote")';expected=expected.replace(quote,pastedQuote);await check();const beforeDelete=expected;
-  await select(quoted('引用二'),'引用二',0);await page.keyboard.press('Backspace');expected=beforeDelete.replace('引用一'+nl+'> '+nl+'> 引用二','引用一引用二');await check();await page.locator('#format-undo').click();expected=beforeDelete;await check();
+  await select(quoted('引用二'),'引用二',0);await page.keyboard.press('Backspace');expected=beforeDelete.replace('引用一'+nl+'> '+nl+'> 引用二','引用一引用二');await check();await clickWorkspaceControl(page,'format-undo');expected=beforeDelete;await check();
   await select(quoted('Before '),'引用一',1,quoted('引用二'),'引用二',1,true);await page.keyboard.press('Backspace');expected=beforeDelete.replace('引用一'+nl+'> '+nl+'> 引用二','引用二');await check();
-  await page.locator('#format-undo').click();expected=beforeDelete;await check();
+  await clickWorkspaceControl(page,'format-undo');expected=beforeDelete;await check();
   await select(item('Child '),'kid',1,item('End last'),'last',2);await paste(item('Child '),'NestedA\nNestedB');
   const pastedNested='3) Parent'+nl+'   1) Child [**k**](child "keep child")NestedA'+nl+'   2) NestedB*st*'+nl+'   20) Keep **one**__two__'+nl+'8) Outside';expected=expected.replace(nested,pastedNested);await check();
-  const afterNested=expected;await page.locator('#format-undo').click();expected=expected.replace(pastedNested,nested);await check();await page.locator('#format-redo').click();expected=afterNested;await check();
+  const afterNested=expected;await clickWorkspaceControl(page,'format-undo');expected=expected.replace(pastedNested,nested);await check();await clickWorkspaceControl(page,'format-redo');expected=afterNested;await check();
   await page.screenshot({path:info.outputPath('structured-ranges.png')});expect(await page.locator('#editor .tiptap a[href]').count()).toBe(0);
-  await page.locator('#show-source').click();await expect(page.locator('#source-editor .cm-content')).toContainText('[**nk** plain](../guide.md "keep title")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
+  await clickWorkspaceControl(page,'show-source');await expect(page.locator('#source-editor .cm-content')).toContainText('[**nk** plain](../guide.md "keep title")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
   await page.locator('#save-original').click();await expect.poll(async()=>(await snap())?.dirty).toBe(false);expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);expect(await fs.readFile(target,'utf8')).toBe('\ufeff'+expected);await backup();const saved=await snap(),id=await page.evaluate(async label=>(await window.documentDemo.listDrafts()).drafts.find(d=>d.label===label).id,saved.label);
   await stop();await launch();await page.locator('#show-drafts').click();await page.locator(`[data-draft-id="${id}"]`).getByRole('button',{name:'恢复副本'}).click();await check();expect((await snap()).originalSave).toBeNull();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);expect(errors).toEqual([]);expect(network).toEqual([]);passed=true;

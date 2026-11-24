@@ -1,6 +1,10 @@
-# Project Roadmap — markora
+# Project Roadmap — Markora
 
-## Current direction (2026-11-18)
+## Markdown authoring · 0.85.0
+
+MD-04 through MD-06 add typed inline delimiters, rectangular paste, quoted list item editing, exact preview navigation and byte-level reopen tests. MD-01 through MD-03 provide the reading baseline, direct source-preserving writing, and offline extension previews. See the [format matrix and acceptance boundaries](markdown-compatibility.md).
+
+## Earlier direction (2026-11-18)
 
 The product goal is a complete, attractive, simple, independent local Mac
 Markdown editor: open a standard file from Finder, write in the accepted visual

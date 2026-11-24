@@ -26,6 +26,7 @@ export function createDraftView({ api, byId, context, restore }) {
     if (r?.code === 'draft-record-capacity') node.textContent += ' 工作区记录已满；请在草稿面板将闲置草稿“移入恢复归档”，保留内容并腾出备份名额。';
     if (unsettled) node.textContent += ' 当前输入或操作尚未确认，不包含在备份保证中。';
     node.dataset.tone = ['backup-failed', 'draft-unverified'].includes(r?.state) ? 'error' : '';
+    summary.hidden = !unsettled && !node.dataset.tone && (r?.state==='file-unmodified' || (s.confirmed.linkedFile && r?.state==='backed-up' && r.revision===s.confirmed.revision));
     summary.dataset.tone = node.dataset.tone;
     summary.textContent = node.dataset.tone === 'error' ? '本地备份未确认 · 请另存新文件，详情中可查看原因'
       : s.inputPaused ? '输入已暂停 · 未确认修改仅保留在当前窗口'

@@ -101,7 +101,7 @@ test('filter and frequent status updates preserve row nodes and never switch the
   c.state.confirmed.revision = 2; shell.sync(); assert.equal(row('draft'), sameRow); assert.equal(calls, 0);
   byId('session-filter').value = 'missing'; byId('session-filter').oninput();
   assert.equal(byId('session-empty').hidden, false); assert.equal(byId('documents').value, 'original');
-  assert.match(byId('document-statistics').textContent, /字符 · Markdown/);
+  assert.match(byId('document-statistics').textContent, /字符$/);
 });
 
 test('draft panel close and Escape preserve pending management, then cancel through the existing action', () => {

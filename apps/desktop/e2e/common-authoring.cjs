@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const { expect } = require('@playwright/test');
 
 // One shared user workflow for source and the real packaged application. All
@@ -29,9 +30,9 @@ async function authorMixedDocument(page, source, { append = false, newline = '\n
   await page.keyboard.press('Enter');await page.keyboard.type('A steady paragraph for words.');
   let body='# Field notes'+nl+nl+'A steady paragraph for words.';await check(body);
   const paragraph='#editor .tiptap > p:last-child';
-  await range(paragraph,2,8);await page.locator('#format-bold').click();body=body.replace('steady','**steady**');await check(body);
-  await range(paragraph,9,18);await page.locator('#format-italic').click();body=body.replace('paragraph','*paragraph*');await check(body);
-  await range(paragraph,23,28);await page.locator('#format-code').click();body=body.replace('words','`words`');await check(body);
+  await range(paragraph,2,8);await clickWorkspaceControl(page,'format-bold');body=body.replace('steady','**steady**');await check(body);
+  await range(paragraph,9,18);await clickWorkspaceControl(page,'format-italic');body=body.replace('paragraph','*paragraph*');await check(body);
+  await range(paragraph,23,28);await clickWorkspaceControl(page,'format-code');body=body.replace('words','`words`');await check(body);
   await range(paragraph,0,1);await page.keyboard.press('Meta+k');await page.locator('#link-href').fill('https://example.test/guide');await page.locator('#link-apply').click();
   body=body.replace('A **steady**','[A](<https://example.test/guide>) **steady**');await check(body);
   await range(paragraph+' [data-document-link]',0);await page.keyboard.press('Meta+k');await page.locator('#link-href').fill('../guide.md#notes');await page.locator('#link-apply').click();

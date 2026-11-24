@@ -1,5 +1,7 @@
 import { Slice, Fragment } from '@tiptap/pm/model';
 import {projectSource} from './document-source-map.mjs';
+import {mapFormatEdit} from './document-format-edit.mjs';
+import {TextSelection} from '@tiptap/pm/state';
 
 // Read only text/plain from the user-initiated paste event. Never parse clipboard HTML.
 // The existing PM filter/controller/IPC remain the edit and history authority.
@@ -23,6 +25,19 @@ export function pastePlainText(view, event, { state, blocked = false, report }) 
   } catch { return reject('未粘贴：无法读取剪贴板文字。当前文字未改变。'); }
   const selection=view.state.selection;
   const inCode=selection.$from.sameParent(selection.$to)&&selection.$from.parent.type.name==='codeBlock'&&selection.$from.parent.attrs.sourceEditable===true;
+  if(!inCode&&typeof text==='string'&&text.includes('\t')&&selection.$from.depth>=2
+      &&['tableCell','tableHeader'].includes(selection.$from.node(-1).type.name)){
+    const command={action:'table-paste',from:selection.from,to:selection.to,insert:text};
+    const mapped=!state.recoveryRecords?.length&&mapFormatEdit(state.source,command);
+    if(!mapped?.ok)return reject('未粘贴。请在单元格内放置光标，并确认矩形数据能放入现有普通文本单元格。');
+    if(mapped.source===state.source)return true;
+    const content=view.state.schema.nodeFromJSON(mapped.projection.doc).content;
+    const tr=view.state.tr.replaceWith(0,view.state.doc.content.size,content);
+    tr.setSelection(TextSelection.create(tr.doc,mapped.selection.from)).setMeta('document-block-shortcut',command);
+    view.dispatch(tr.scrollIntoView());
+    if(!view.state.doc.eq(tr.doc))return reject('未能确认表格修改，已保留当前内容。');
+    return true;
+  }
   if (typeof text !== 'string' || text.length > 4096 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u2028\u2029]/u.test(text)||(!inCode&&text.includes('\t'))) {
     return reject('未粘贴：当前只支持不超过 4096 个 UTF-16 单位的纯文本；代码块外不支持制表符，控制字符暂不支持。没有截断内容。');
   }

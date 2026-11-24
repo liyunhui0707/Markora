@@ -5,12 +5,14 @@ import {mapCombinedMark} from './document-tree-edit.mjs';
 import capacity from './document-capacity.js';
 const {MAX_SOURCE_UNITS} = capacity;
 import {mapImageEdit} from './document-image-edit.mjs';
-import {tableActions,mapTableEdit} from './document-table-edit.mjs';
+import {tableActions,mapTableEdit,mapTablePaste} from './document-table-edit.mjs';
 import {mapListEdit} from './document-list-edit.mjs';
 import {mapStructuredEdit} from './document-structured-edit.mjs';
 import { mapLinkEdit } from './document-link-edit.mjs';
 import { mapBoundaryEdit } from './document-boundary-edit.mjs';
 import { projectSource, spanBlock } from './document-source-map.mjs';
+import {equalCanonicalProjection} from './document-canonical-equal.mjs';
+import {mapQuotedListBoundary} from './document-extended-source.mjs';
 const reject = () => ({ok:false,code:'unsafe-format-range'});
 const actions = ['paragraph','heading-1','heading-2','heading-3','heading-4','heading-5','heading-6','block-shortcut','fence-shortcut','blockquote','code-block','split-quote','join-quote','exit-block','bold','italic','code','bullet-list','ordered-list','split-list','join-list','split-heading','split-paragraph','join-paragraph','task-list','task-shortcut','toggle-task','indent-list','outdent-list'];
 const paragraph = content => ({type:'paragraph',content});
@@ -27,8 +29,50 @@ function merge(nodes) {
   return result;
 }
 // Explicit bounded commands. No caller-provided source, source offsets, path or serializer.
+function mapInlineTyping(source,{action,from,to,insert}){
+  if(!Number.isSafeInteger(from)||from!==to||typeof insert!=='string'||insert.length>2||!insert.isWellFormed()
+      ||Array.from(insert).length!==1||/[\p{Cc}\u2028\u2029]/u.test(insert)||source.length+insert.length>MAX_SOURCE_UNITS)return reject();
+  const closing={ '*':['bold','italic'],'_':['bold','italic'],'~':['strike'],'`':['code'],')':['link'] };
+  if(action==='inline-close'&&!Object.hasOwn(closing,insert))return reject();
+  const original=projectSource(source);
+  const block=original.blocks.find(b=>b&&from===b.to-1)||original.extended?.find(b=>from===b.to-1);
+  if(!block||block.sourceTo-block.sourceFrom>4096)return reject();
+  const index=block.index??original.blocks.indexOf(block),old=original.doc.content[index];
+  if(old.type!=='paragraph')return reject();
+  const raw=source.slice(block.sourceFrom,block.sourceTo), end=block.sourceTo;
+  if(!raw||/[\r\n]/.test(raw))return reject();
+  // Isolate the paragraph on both sides. A reference or other surrounding
+  // syntax may change its meaning and must not be guessed by a shortcut.
+  const single=projectSource(raw).doc.content;
+  if(single.length!==1||!equalCanonicalProjection(old,single[0]))return reject();
+  const local=projectSource(raw+insert).doc.content;
+  if(local.length!==1||local[0].type!=='paragraph')return reject();
+  const children=local[0].content, last=children.at(-1);
+  if(action==='inline-close'){
+    if(!last?.marks?.some(m=>closing[insert].includes(m.type)))return reject();
+  }else{
+    if(!old.content.at(-1)?.marks?.length||!equalCanonicalProjection(local[0],{
+      ...old,content:[...old.content,{type:'text',text:insert}]
+    }))return reject();
+  }
+  const next=source.slice(0,end)+insert+source.slice(end);
+  const projection=projectSource(next),expected={...original.doc,content:original.doc.content.slice()};
+  expected.content[index]=local[0];
+  if(!equalCanonicalProjection(expected,projection.doc))return reject();
+  const after=projection.blocks[index]||projection.extended?.find(b=>b.index===index);
+  if(!after)return reject();
+  const caret=after.to-1;
+  return {ok:true,source:next,projection,change:{from:end,to:end,insert},
+    inverseSource:{from:end,to:end+insert.length,insert:''},selection:{from:caret,to:caret}};
+}
+
 export function mapFormatEdit(source, command) {
   if(!command || Object.getPrototypeOf(command)!==Object.prototype) return reject();
+  if(['inline-close','inline-after','table-paste'].includes(command.action)){
+    if(Object.keys(command).length!==4||!['action','from','to','insert'].every(k=>Object.hasOwn(command,k)))return reject();
+    if(command.action==='table-paste')return mapTablePaste(source,projectSource(source),command,projectSource);
+    return mapInlineTyping(source,command);
+  }
   if(['set-image','remove-image','image-exit'].includes(command.action)) return mapImageEdit(source,command);
   if(['set-link','remove-link'].includes(command.action)) return mapLinkEdit(source,command);
   if(Object.keys(command).length!==3
@@ -36,6 +80,7 @@ export function mapFormatEdit(source, command) {
   const {action,from,to}=command;
   if(![...actions,'list-paragraph',...tableActions].includes(action) || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from<1 || to<from) return reject();
   const p=projectSource(source);
+  const quotedList=mapQuotedListBoundary(source,p,command,projectSource);if(quotedList)return quotedList;
   const container=mapContainerFormat(source,p,command,projectSource);if(container)return container.ok?container:{...container,code:'unsafe-format-range'};
   const wrapped=mapWrappedFormat(source,p,command,projectSource);if(wrapped)return wrapped;
   const article=mapArticleFormat(source,p,command,projectSource);if(article)return article;

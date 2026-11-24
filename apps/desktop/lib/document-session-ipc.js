@@ -288,7 +288,7 @@ function createDocumentSessions({ service, projectSource, mapTextEdit, mapFormat
     const binding = authorizedBinding(event);
     if (!binding) return failure('unauthorized-sender');
     const fields = { 'import-referenced-image':['operation','sessionId','expectedRevision','href'], 'import-pasted-image':['operation','sessionId','expectedRevision','base64'], 'compare-linked-file':['operation','sessionId','expectedRevision'], 'edit-compared-file':['operation','sessionId','expectedRevision','comparisonToken'], 'inspect-linked-file':['operation','sessionId','expectedRevision'], 'open-linked-file':['operation','sessionId','expectedRevision'], 'reveal-linked-file':['operation','sessionId','expectedRevision'], 'save-original':['operation','sessionId','expectedRevision'], 'offload-save-recovery':['operation','recordId','expectedToken'], 'reveal-draft-archive':['operation','draftId'], 'list-save-recoveries':['operation'], 'reveal-save-staging':['operation','recordId'], 'reveal-save-recovery':['operation','recordId'], 'list-native-opens': ['operation'], 'dismiss-native-open': ['operation', 'requestId'], 'open-native-file': ['operation', 'requestId'], 'import-image': ['operation', 'sessionId', 'expectedRevision'], 'image-preview': ['operation', 'sessionId', 'expectedRevision', 'href'], 'rename-draft': ['operation', 'sessionId', 'expectedRevision', 'expectedLabel', 'label'], 'list-recents': ['operation'], 'clear-recents': ['operation'], 'open-recent': ['operation', 'recentId'], 'close-document': ['operation', 'sessionId', 'expectedRevision'], 'open-confirmed-copy': ['operation', 'sessionId', 'expectedRevision', 'copyId'], 'reveal-confirmed-copy': ['operation', 'sessionId', 'expectedRevision', 'copyId'], 'edit-copy': ['operation', 'sessionId', 'expectedRevision', 'expectedSha256'], 'create-persistent-copy': ['operation', 'sessionId', 'expectedRevision', 'expectedSha256','mode'], 'create-test-copy': ['operation', 'sessionId', 'expectedRevision', 'expectedSha256'], 'manage-draft': ['operation', 'draftId', 'action', 'expectedToken'], 'list-drafts': ['operation'], 'restore-draft': ['operation', 'draftId'], 'new-temporary': ['operation'], 'open-file': ['operation'], list: ['operation'], snapshot: ['operation', 'sessionId'], check: ['operation', 'sessionId'],
-      format: ['operation', 'sessionId', 'expectedRevision', 'from', 'to', 'action', 'label', 'href'],
+      format: ['operation', 'sessionId', 'expectedRevision', 'from', 'to', 'action', 'label', 'href', 'insert'],
       'source-edit': ['operation', 'sessionId', 'expectedRevision', 'from', 'to', 'insert'],
       edit: ['operation', 'sessionId', 'expectedRevision', 'from', 'to', 'insert'],
       save: ['operation', 'sessionId', 'expectedRevision'], close: ['operation', 'sessionId', 'expectedRevision'],
@@ -438,7 +438,7 @@ function createDocumentSessions({ service, projectSource, mapTextEdit, mapFormat
           if (typeof mapFormatEdit !== 'function') return reply(failure('format-unavailable'));
           const before = s.document.text;
           const command={action:payload.action,from:payload.from,to:payload.to};
-          for(const key of ['label','href'])if(Object.hasOwn(payload,key))command[key]=payload[key];
+          for(const key of ['label','href','insert'])if(Object.hasOwn(payload,key))command[key]=payload[key];
           const mapped = mapFormatEdit(before, command);
           if (!mapped.ok) return reply(failure(mapped.code));
           if (payload.action === 'set-image') images?.validateChange(s.document, mapped.source);

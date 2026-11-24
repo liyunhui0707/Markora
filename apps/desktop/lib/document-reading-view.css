@@ -110,3 +110,11 @@ body[data-keyboard-navigation] #source-editor .cm-focused {outline:2px solid var
 #source-dialog #apply-source {flex-shrink:0;background:var(--accent);color:var(--paper)}
 
 #source-editor .cm-panels {background:var(--panel);color:var(--ink);border-color:var(--line)}
+.document-preview :is(th,td)[data-align="right"] {text-align:right}
+.document-preview :is(th,td)[data-align="center"] {text-align:center}
+.document-preview :is(th,td)[data-align="left"] {text-align:left}
+
+#source-block-preview {flex:0 1 auto;max-height:35%;overflow:auto;border-top:1px solid var(--line);padding:12px 24px}
+.document-preview [data-diagram] img {display:block;max-width:100%;max-height:55vh}
+.document-preview [data-formula] small,.document-preview [data-diagram] small {display:block;color:var(--muted)}
+.document-preview [data-preview-jump] {font:inherit;color:var(--accent);padding:0 .15em;background:none;border:0;text-decoration:underline}

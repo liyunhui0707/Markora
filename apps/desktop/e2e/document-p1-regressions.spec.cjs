@@ -1,3 +1,4 @@
+const {clickWorkspaceControl, workspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {createMarkdownCopy,closeDocumentApp}=require('./helpers/document-file-actions.cjs');
 const { test, expect, _electron: electron } = require('@playwright/test');
 const { authorMixedDocument } = require('./common-authoring.cjs');
@@ -1553,7 +1554,7 @@ test('writing UI V2 panels, composition gate, copy feedback and document switchi
     await page.locator('#show-drafts').click(); await expect(page.locator('#draft-empty')).toBeVisible();
     await captureTestWindow(app, info.outputPath('panels-empty-drafts.png')); await page.keyboard.press('Escape');
     await page.locator('#open-file').click(); await expect(page.locator('#readonly-badge')).toHaveText('原文只读');
-    await page.locator('#show-details').click();
+    await clickWorkspaceControl(page,'show-details');
     await expect(page.locator('#details-document-name')).toHaveText('写作练习.md');
     await expect(page.locator('#details-document-kind')).toHaveText('原文件 · 只读');
     await expect(page.locator('#details-backup-card')).toBeHidden();
@@ -1571,7 +1572,7 @@ test('writing UI V2 panels, composition gate, copy feedback and document switchi
     await captureTestWindow(app, info.outputPath('writing-v2-drafts.png'));
     await page.keyboard.press('Escape'); await expect(page.locator('#draft-dialog')).toBeHidden();
     await expect(page.locator('#show-drafts')).toBeFocused();
-    await page.locator('#show-details').click(); await expect(page.locator('#temporary-notice')).toBeHidden();
+    await clickWorkspaceControl(page,'show-details'); await expect(page.locator('#temporary-notice')).toBeHidden();
     await expect(page.locator('#details-document-kind')).toHaveText('独立草稿 · 未存为文件');
     await expect(page.locator('#copy-empty')).toBeVisible();
     await page.locator('#details-writing-help > summary').click(); await expect(page.locator('#temporary-notice')).toBeVisible();
@@ -1610,9 +1611,9 @@ test('writing UI V2 panels, composition gate, copy feedback and document switchi
     await expect(page.locator('#copy-summary-compact')).toContainText('writing-ui.md');
     expect((await fs.readFile(target)).equals(exported)).toBe(true); expect(await fs.readFile(original, 'utf8')).toBe(raw);
     await captureTestWindow(app, info.outputPath('writing-v2-export-failure-preserves-receipt.png'));
-    await page.locator('#show-reading-settings').click(); await page.locator('#reading-theme-dark').click();
+    await clickWorkspaceControl(page,'show-reading-settings'); await page.locator('#reading-theme-dark').click();
     await page.locator('#close-reading-settings').click();
-    await page.locator('#show-details').click(); await expect(page.locator('#test-copy-summary')).toContainText(target);
+    await clickWorkspaceControl(page,'show-details'); await expect(page.locator('#test-copy-summary')).toContainText(target);
     await expect(page.locator('#confirmed-copy-card')).toBeVisible();
     await expect(page.locator('#latest-copy-card')).toHaveAttribute('data-tone','error');
     await expect(page.locator('#latest-copy-card')).toContainText('target-exists');
@@ -1651,7 +1652,7 @@ test('writing V3 quiet composition and safe formatting export reopen', async ({}
     const originalId=await page.locator('#documents').inputValue();await expect(page.locator('#format-toolbar')).toBeHidden();
     const refusal=await page.evaluate(sessionId=>window.documentDemo.format({sessionId,expectedRevision:0,action:'heading-1',from:1,to:1}),originalId);expect(refusal.code).toBe('read-only-document');
     await page.locator('#edit-copy').click();const id=await page.locator('#documents').inputValue();
-    await expect(page.locator('#format-toolbar')).toBeVisible();await expect(page.locator('#document-name')).toContainText('编辑副本');
+    await expect(page.locator('#format-toolbar')).toBeHidden();await expect(page.locator('#document-name')).toContainText('编辑副本');
     await expect(page.locator('#backup-summary')).toHaveText('已备份');
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].showInactive());
     await page.evaluate(()=>{window.v3Trace=[];for(const type of ['compositionstart','compositionend'])document.addEventListener(type,()=>window.v3Trace.push({type}),true);});
@@ -1670,24 +1671,24 @@ test('writing V3 quiet composition and safe formatting export reopen', async ({}
       expect((await snapshot(id)).snapshot.source).toContain('第一段中文。我');
     } finally {await cdp.detach();await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].hide());}
     await page.keyboard.press('Meta+z');await settled();expect((await snapshot(id)).snapshot.source).toBe(raw.slice(1));
-    await select('#editor p:first-of-type',0);await page.locator('#format-block').selectOption('heading-2');await settled();
+    await select('#editor p:first-of-type',0);await (await workspaceControl(page,'format-block')).selectOption('heading-2');await settled();
     await expect(page.locator('#editor h2')).toHaveText('第一段中文。');
-    await page.locator('#format-undo').click();await settled();await expect(page.locator('#editor h2')).toHaveCount(0);
-    await page.locator('#format-redo').click();await settled();await expect(page.locator('#editor h2')).toHaveCount(1);
+    await clickWorkspaceControl(page,'format-undo');await settled();await expect(page.locator('#editor h2')).toHaveCount(0);
+    await clickWorkspaceControl(page,'format-redo');await settled();await expect(page.locator('#editor h2')).toHaveCount(1);
     await select('#editor h2',6);await page.keyboard.press('Enter');await settled();await page.keyboard.type('New body');await settled();
     await expect(page.locator('#editor > .tiptap > p').first()).toHaveText('New body');
-    await select('#editor > .tiptap > p:first-of-type',0,3);await page.locator('#format-bold').click();await settled();
+    await select('#editor > .tiptap > p:first-of-type',0,3);await clickWorkspaceControl(page,'format-bold');await settled();
     await expect(page.locator('#editor strong')).toHaveText('New');
     // Remove the whole selected mark with the same keyboard command; original bytes return.
     await page.keyboard.press('Meta+b');await settled();await expect(page.locator('#editor strong')).toHaveCount(0);
-    await select('#editor > .tiptap > p:first-of-type',0);await page.locator('#format-block').selectOption('bullet-list');await settled();
+    await select('#editor > .tiptap > p:first-of-type',0);await (await workspaceControl(page,'format-block')).selectOption('bullet-list');await settled();
     await expect(page.locator('#editor ul li p')).toHaveText('New body');
     await select('#editor ul li p',8);await page.keyboard.press('Enter');await settled();await page.keyboard.type('Next item');await settled();
     await expect(page.locator('#editor ul li')).toHaveCount(2);
     await page.keyboard.press('Enter');await settled();await expect(page.locator('#editor ul li')).toHaveCount(3);
     await page.keyboard.press('Enter');await settled();await expect(page.locator('#editor ul li')).toHaveCount(2);
     await page.keyboard.type('After list');await settled();
-    await select('#editor ul li:first-child p',0);await page.locator('#format-block').selectOption('ordered-list');await settled();
+    await select('#editor ul li:first-child p',0);await (await workspaceControl(page,'format-block')).selectOption('ordered-list');await settled();
     await expect(page.locator('#editor ol li')).toHaveCount(2);
     const beforeUnsupported=(await snapshot(id)).snapshot;
     await page.locator('#editor pre').last().click();await page.keyboard.type('MUST NOT MODIFY');await settled();
@@ -1739,8 +1740,8 @@ test('approved shell V1 real sidebar keeps identity through switching, compositi
     await expect(row(sourceId)).toHaveAttribute('aria-current','true');
     await row(copyId).click();await expect(page.locator('#readonly-badge')).toHaveText('本地草稿');
     expect((await snapshot(copyId)).snapshot.source).toBe(edited.source);
-    await page.locator('#format-undo').click();await settled();expect((await snapshot(copyId)).snapshot.source).toBe(raw);
-    await page.locator('#format-redo').click();await settled();expect((await snapshot(copyId)).snapshot.source).toBe(edited.source);
+    await clickWorkspaceControl(page,'format-undo');await settled();expect((await snapshot(copyId)).snapshot.source).toBe(raw);
+    await clickWorkspaceControl(page,'format-redo');await settled();expect((await snapshot(copyId)).snapshot.source).toBe(edited.source);
     await page.locator('#session-filter').fill('不存在');await expect(page.locator('#session-empty')).toHaveText('没有匹配的已打开文档。');
     expect(await page.locator('#documents').inputValue()).toBe(copyId);await page.locator('#session-filter').fill('');
     await page.locator('#editor .tiptap').dispatchEvent('compositionstart',{data:''});
@@ -1795,7 +1796,7 @@ test('reading V1 outline navigation and appearance preserve real document state'
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1440,900));
     await page.locator('#empty-open').click();const originalId=await page.locator('#documents').inputValue();
     const before=(await snapshot(originalId)).snapshot;
-    await page.locator('#toggle-document-outline').click();
+    await clickWorkspaceControl(page,'toggle-document-outline');
     await expect(page.locator('#document-outline')).toBeVisible();
     await expect(page.locator('#outline-list button')).toHaveText(['写作与阅读','重复标题','重复标题','更细的层次','文章最后']);
     await page.evaluate(()=>{window.staleReadingJump=document.querySelector('#outline-list button:last-child').onclick;window.readingEditorNode=document.querySelector('#editor .tiptap');});
@@ -1803,7 +1804,7 @@ test('reading V1 outline navigation and appearance preserve real document state'
     expect(await page.locator('#document-scroll').evaluate(n=>n.scrollTop)).toBeGreaterThan(300);
     expect((await snapshot(originalId)).snapshot).toEqual(before);
     await expect(page.locator('#editor .tiptap')).toHaveAttribute('contenteditable','false');
-    await page.locator('#show-reading-settings').click();
+    await clickWorkspaceControl(page,'show-reading-settings');
     await page.locator('#reading-theme-dark').click();
     await page.locator('#reading-font').selectOption('serif');await page.locator('#reading-size').selectOption('21');
     await page.locator('#reading-width').selectOption('800');await page.locator('#reading-spacing').selectOption('2.2');
@@ -1829,9 +1830,9 @@ test('reading V1 outline navigation and appearance preserve real document state'
     await select('#editor h1',0);await page.keyboard.type('X');await settled();
     await expect(page.locator('#outline-list button').first()).toHaveText('X写作与阅读');
     const edited=(await snapshot(copyId)).snapshot;
-    await page.locator('#format-undo').click();await settled();await expect(page.locator('#outline-list button').first()).toHaveText('写作与阅读');
+    await clickWorkspaceControl(page,'format-undo');await settled();await expect(page.locator('#outline-list button').first()).toHaveText('写作与阅读');
     expect((await snapshot(copyId)).snapshot.source).toBe(raw);
-    await page.locator('#format-redo').click();await settled();await expect(page.locator('#outline-list button').first()).toHaveText('X写作与阅读');
+    await clickWorkspaceControl(page,'format-redo');await settled();await expect(page.locator('#outline-list button').first()).toHaveText('X写作与阅读');
     expect((await snapshot(copyId)).snapshot.source).toBe(edited.source);
     await page.locator('#editor .tiptap').dispatchEvent('compositionstart',{data:''});
     await expect(page.locator('#show-reading-settings')).toBeDisabled();
@@ -1842,14 +1843,14 @@ test('reading V1 outline navigation and appearance preserve real document state'
     expect(await page.locator('#document-scroll').evaluate(n=>n.scrollTop)).toBe(top);
     await page.locator('#editor .tiptap').dispatchEvent('compositionend',{data:''});await settled();
     await expect(page.locator('#show-reading-settings')).toBeEnabled();
-    await page.locator('#show-reading-settings').click();await page.locator('#reading-theme-dark').click();
+    await clickWorkspaceControl(page,'show-reading-settings');await page.locator('#reading-theme-dark').click();
     await page.locator('#close-reading-settings').click();
     await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(390,800));
     await expect(page.locator('#document-outline')).toBeHidden();
-    await page.locator('#toggle-document-outline').click();await expect(page.locator('#document-outline')).toBeVisible();
+    await clickWorkspaceControl(page,'toggle-document-outline');await expect(page.locator('#document-outline')).toBeVisible();
     await captureTestWindow(app,info.outputPath('reading-outline-narrow.png'));
     await page.locator('#outline-list button').last().click();await expect(page.locator('#document-outline')).toBeHidden();
-    await page.locator('#show-reading-settings').click();
+    await clickWorkspaceControl(page,'show-reading-settings');
     await captureTestWindow(app,info.outputPath('reading-settings-narrow.png'));
     expect(await page.locator('#reading-settings-dialog').evaluate(n=>n.scrollWidth<=n.clientWidth)).toBe(true);
     await page.locator('#reset-reading-settings').click();
@@ -1876,12 +1877,13 @@ test('integrated appearance acceptance preserves writing across panels and respo
     await expect.poll(async () => (await snapshot(draftId)).snapshot.draftBackup.state).toBe('backed-up');
     const before = (await snapshot(draftId)).snapshot;
     for (const [button, panel] of [['show-reading-settings', 'reading-settings-dialog'], ['show-drafts', 'draft-dialog'], ['show-details', 'document-details-dialog']]) {
-      await page.locator('#' + button).click(); await expect(page.locator('#' + panel)).toBeVisible();
+      await clickWorkspaceControl(page,button); await expect(page.locator('#' + panel)).toBeVisible();
       expect(await page.locator('#' + panel).evaluate(n => n.contains(document.activeElement))).toBe(true);
       await page.keyboard.press('Escape'); await expect(page.locator('#' + panel)).toBeHidden();
       await expect(page.locator('#' + button)).toBeFocused();
     }
-    await page.locator('#file-actions-toggle').click();await expect(page.locator('#create-test-copy')).toBeVisible();
+    if (!(await page.locator('#file-actions').evaluate(n=>n.open))) await page.locator('#file-actions-toggle').click();
+    await expect(page.locator('#create-test-copy')).toBeVisible();
     await page.keyboard.press('Escape');await expect(page.locator('#file-actions')).not.toHaveAttribute('open','');
     expect((await snapshot(draftId)).snapshot).toEqual(before);
     const raw = '# 给文字留一点空间\n\n把零散的想法写下来，再慢慢整理成自己的语言。\n\n## 今天的笔记\n\n一个安静的界面，让注意力回到正在写下的内容。\n\n- 记录观察\n- 整理思路\n- 留下明天的起点\n\n## 关于写作\n\nGood writing begins with a clear thought.\n\n```js\nconst thought = "Keep it simple.";\n```\n';
@@ -1900,10 +1902,10 @@ test('integrated appearance acceptance preserves writing across panels and respo
     await title.click(); await page.locator('#document-statistics').click();
     await expect.soft(popup, 'Clicking outside dismisses the document title popup').not.toHaveAttribute('open', '', { timeout: 500 });
     if (await popup.evaluate(n => n.open)) await title.click();
-    await resize(1440, 900); await page.locator('#toggle-document-outline').click();
+    await resize(1440, 900); await clickWorkspaceControl(page,'toggle-document-outline');
     await expect(page.locator('#document-outline')).toBeVisible();
     await captureTestWindow(app, info.outputPath('acceptance-writing-light.png'));
-    await page.locator('#show-reading-settings').click(); await page.locator('#reading-theme-dark').click();
+    await clickWorkspaceControl(page,'show-reading-settings'); await page.locator('#reading-theme-dark').click();
     await page.keyboard.press('Escape'); await captureTestWindow(app, info.outputPath('acceptance-writing-dark.png'));
     for (const width of [1024, 760, 390]) {
       await resize(width, 800); await title.click();
@@ -1953,22 +1955,22 @@ test('find V1 searches readonly and editable documents without changing content 
     expect(await page.evaluate(() => getSelection().toString())).toBe('Alpha');
     expect((await snapshot(sourceId)).snapshot).toEqual(before);
     await page.locator('#edit-copy').click(); const copyId = await page.locator('#documents').inputValue();
-    await page.locator('#show-document-find').click(); await page.locator('#find-query').fill('Zulu');
+    await clickWorkspaceControl(page,'show-document-find'); await page.locator('#find-query').fill('Zulu');
     await expect(page.locator('#find-count')).toHaveText('无匹配');
     // One input transaction: the existing controller records per-edit Undo steps.
     await select('#editor p:first-of-type', 0); await page.keyboard.insertText('Zulu '); await settled();
     await expect(page.locator('#find-count')).toHaveText('1 / 1');
     const edited = (await snapshot(copyId)).snapshot;
-    await page.locator('#format-undo').click(); await settled();
+    await clickWorkspaceControl(page,'format-undo'); await settled();
     expect((await snapshot(copyId)).snapshot.source).toBe(raw);
     await expect(page.locator('#find-count')).toHaveText('无匹配');
-    await page.locator('#format-redo').click(); await settled(); await expect(page.locator('#find-count')).toHaveText('1 / 1');
+    await clickWorkspaceControl(page,'format-redo'); await settled(); await expect(page.locator('#find-count')).toHaveText('1 / 1');
     expect((await snapshot(copyId)).snapshot.source).toBe(edited.source);
     await page.locator(`#session-list button[data-session-id="${sourceId}"]`).click(); await expect(page.locator('#find-count')).toHaveText('无匹配');
     await page.locator(`#session-list button[data-session-id="${copyId}"]`).click(); await expect(page.locator('#find-count')).toHaveText('1 / 1');
     await page.locator('#find-query').fill('Alpha'); await expect(page.locator('#find-count')).toHaveText('1 / 3');
     await captureTestWindow(app, info.outputPath('find-light.png'));
-    await page.locator('#show-reading-settings').click(); await page.locator('#reading-theme-dark').click(); await page.locator('#close-reading-settings').click();
+    await clickWorkspaceControl(page,'show-reading-settings'); await page.locator('#reading-theme-dark').click(); await page.locator('#close-reading-settings').click();
     await captureTestWindow(app, info.outputPath('find-dark.png'));
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(390, 800));
     await captureTestWindow(app, info.outputPath('find-narrow.png'));
@@ -1986,7 +1988,7 @@ test('find V1 pauses for editor composition and respects search input compositio
     const file = path.join(root, 'find-guard.md'); await fs.writeFile(file, 'Alpha 中文\n', { flag: 'wx', mode: 0o600 });
     await app.evaluate(({ dialog }, filePath) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] }); }, file);
     await page.locator('#empty-open').click(); await page.locator('#edit-copy').click();
-    await page.locator('#show-document-find').click(); await page.locator('#find-query').fill('Alpha');
+    await clickWorkspaceControl(page,'show-document-find'); await page.locator('#find-query').fill('Alpha');
     await page.locator('#editor .tiptap').focus();
     await page.locator('#editor .tiptap').dispatchEvent('compositionstart', { data: '' });
     await expect(page.locator('#find-query')).toBeDisabled(); await expect(page.locator('#find-next')).toBeDisabled();
@@ -2000,7 +2002,7 @@ test('find V1 pauses for editor composition and respects search input compositio
     await page.locator('#find-query').dispatchEvent('keydown', { key: 'Escape', isComposing: true });
     await expect(page.locator('#document-find')).toBeVisible();
     await page.locator('#find-query').dispatchEvent('compositionend'); await expect(page.locator('#find-count')).toHaveText('1 / 1');
-    await page.locator('#show-details').click(); await expect(page.locator('#document-details-dialog')).toBeVisible();
+    await clickWorkspaceControl(page,'show-details'); await expect(page.locator('#document-details-dialog')).toBeVisible();
     await page.keyboard.press('Meta+f'); await expect(page.locator('#find-query')).not.toBeFocused();
     await page.keyboard.press('Escape'); await expect(page.locator('#document-details-dialog')).toBeHidden(); await expect(page.locator('#document-find')).toBeVisible();
     await page.locator('#find-query').focus(); await page.keyboard.press('Escape'); await expect(page.locator('#document-find')).toBeHidden();
@@ -2050,8 +2052,8 @@ test('confirmed export shortcuts reopen readonly, retain later edits and request
     const returned = (await snapshot(draftId)).snapshot;
     for (const key of ['source', 'revision', 'dirty', 'canUndo', 'canRedo']) expect(returned[key]).toEqual(later[key]);
     await page.keyboard.press('Escape');
-    await page.locator('#format-undo').click(); await settled(); expect((await snapshot(draftId)).snapshot.source).toBe(exported.source);
-    await page.locator('#format-redo').click(); await settled(); expect((await snapshot(draftId)).snapshot.source).toBe(later.source);
+    await clickWorkspaceControl(page,'format-undo'); await settled(); expect((await snapshot(draftId)).snapshot.source).toBe(exported.source);
+    await clickWorkspaceControl(page,'format-redo'); await settled(); expect((await snapshot(draftId)).snapshot.source).toBe(later.source);
     // A rejected subsequent export must not disable the prior successful receipt.
     await createMarkdownCopy(page);
     await expect(page.locator('#copy-operation-alert')).toContainText('同名目标已存在');
@@ -2060,7 +2062,7 @@ test('confirmed export shortcuts reopen readonly, retain later edits and request
     await expect(page.locator('#editor .tiptap')).toHaveAttribute('contenteditable', 'false');
     expect((await snapshot(await page.locator('#documents').inputValue())).snapshot.source).toBe(exported.source);
     await selectDocument(page, draftId); await page.keyboard.press('Escape');
-    await page.locator('#show-reading-settings').click(); await page.locator('#reading-theme-dark').click(); await page.keyboard.press('Escape');
+    await clickWorkspaceControl(page,'show-reading-settings'); await page.locator('#reading-theme-dark').click(); await page.keyboard.press('Escape');
     await captureTestWindow(app, info.outputPath('copy-shortcuts-dark.png'));
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(390, 800));
     await expect(page.locator('#document-scroll #open-confirmed-copy')).toBeInViewport();
@@ -2090,7 +2092,7 @@ test('individual document close cancels safely, keeps recoverable writing and re
     const draft = (await page.evaluate(() => window.documentDemo.list())).sessions.find(s => s.sessionId !== original).sessionId;
     await select('#editor p:first-of-type', 0); await page.keyboard.type('Edited '); await settled();
     const before = await snapshot(draft); expect(before.snapshot.canUndo).toBe(true);
-    await page.locator('#close-current-document').click();
+    await clickWorkspaceControl(page,'close-current-document');
     await expect(page.locator('#editor .tiptap')).toHaveAttribute('contenteditable', 'true');
     expect((await snapshot(draft)).snapshot.source).toBe(before.snapshot.source);
     expect((await snapshot(draft)).snapshot.canUndo).toBe(true);
@@ -2099,15 +2101,15 @@ test('individual document close cancels safely, keeps recoverable writing and re
     expect((await page.evaluate(s => window.documentDemo.closeDocument({ sessionId: s.sessionId, expectedRevision: s.revision }), before.snapshot)).code).toBe('composition-active');
     await page.locator('#editor .tiptap').dispatchEvent('compositionend', { data: '' }); await settled();
     await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 1 }); });
-    await page.locator('#close-current-document').click();
+    await clickWorkspaceControl(page,'close-current-document');
     await expect(page.locator('#document-name')).toHaveText('close-original.md');
     expect((await page.evaluate(() => window.documentDemo.list())).sessions.map(s => s.sessionId)).toEqual([original]);
     const drafts = await page.evaluate(() => window.documentDemo.listDrafts());
     expect(drafts.drafts).toHaveLength(1); expect(drafts.drafts[0].active).toBe(false);
-    await page.locator('#toggle-document-outline').click(); await expect(page.locator('#outline-list')).toContainText('Original');
-    await page.locator('#show-document-find').click(); await page.locator('#find-query').fill('First');
+    await clickWorkspaceControl(page,'toggle-document-outline'); await expect(page.locator('#outline-list')).toContainText('Original');
+    await clickWorkspaceControl(page,'show-document-find'); await page.locator('#find-query').fill('First');
     await expect(page.locator('#find-count')).toHaveText('1 / 1');
-    await page.locator('#close-current-document').click();
+    await clickWorkspaceControl(page,'close-current-document');
     await expect(page.locator('#find-query')).toHaveValue(''); await expect(page.locator('#outline-list')).toBeEmpty();
     await expect(page.locator('#empty-state')).toBeVisible(); await expect(page.locator('#session-count')).toHaveText('0');
     await expect(page.locator('#close-current-document')).toBeHidden(); await expect(page.locator('#editor')).toBeHidden();
@@ -2142,7 +2144,7 @@ test('individual document close refuses a replaced backup directory and retains 
     const before = (await snapshot(id)).snapshot;
     // Only the private synthetic draft fixture is moved; retain both identities as failure evidence.
     await fs.rename(draftRoot, draftRoot + '-moved'); await fs.mkdir(draftRoot, { mode: 0o700 });
-    await page.locator('#close-current-document').click();
+    await clickWorkspaceControl(page,'close-current-document');
     await expect(page.locator('#viewer-status')).toContainText('文档未关闭');
     await expect(page.locator('#backup-summary')).toContainText('本地备份未确认');
     await expect(page.locator('#editor .tiptap')).toHaveAttribute('contenteditable', 'true');
@@ -2151,7 +2153,7 @@ test('individual document close refuses a replaced backup directory and retains 
     expect(after.source).toBe(before.source); expect(after.canUndo).toBe(true);
     await select('#editor p:first-child', 0); await page.keyboard.type('X'); await settled();
     expect((await snapshot(id)).snapshot.source).not.toBe(before.source);
-    await page.locator('#format-undo').click(); await settled();
+    await clickWorkspaceControl(page,'format-undo'); await settled();
     after = (await snapshot(id)).snapshot; expect(after.source).toBe(before.source); expect(after.canRedo).toBe(true);
     expect(await fs.readFile(file, 'utf8')).toBe(source);
     await captureTestWindow(app, info.outputPath('close-backup-refused.png'));
@@ -2215,9 +2217,9 @@ test('paragraph range V1 replaces selections, continues writing and reopens an e
     expect((await snapshot(id)).snapshot.source).toBe(pasted.replace('Tail.', 'Safe Tail.'));
     await selectDocument(page, originalId); expect((await snapshot(originalId)).snapshot.source).toBe(before.source);
     await expect(page.locator('#editor .tiptap')).toHaveAttribute('contenteditable', 'false');
-    await selectDocument(page, id); await page.locator('#format-undo').click(); await settled();
+    await selectDocument(page, id); await clickWorkspaceControl(page,'format-undo'); await settled();
     expect((await snapshot(id)).snapshot.source).toBe(pasted);
-    await page.locator('#format-redo').click(); await settled(); const ready = (await snapshot(id)).snapshot;
+    await clickWorkspaceControl(page,'format-redo'); await settled(); const ready = (await snapshot(id)).snapshot;
     await createMarkdownCopy(page);
     await expect.poll(async () => (await snapshot(id)).snapshot.copyState.state).toBe('created-confirmed');
     const after = (await snapshot(id)).snapshot; receipt = after.copyState;
@@ -2296,8 +2298,8 @@ test('inline range V1 edits mixed bold text, continues typing and exports exact 
     await range(3,8);await paste('保留😀');await settled();expect(await source()).toBe(pasted);
     await selectDocument(page,originalId);await expect(page.locator('#editor .tiptap')).toHaveAttribute('contenteditable','false');
     expect((await snapshot(originalId)).snapshot.source).toBe(before);
-    await selectDocument(page,id);await page.locator('#format-undo').click();await settled();expect(await source()).toBe(before);
-    await page.locator('#format-redo').click();await settled();expect(await source()).toBe(pasted);
+    await selectDocument(page,id);await clickWorkspaceControl(page,'format-undo');await settled();expect(await source()).toBe(before);
+    await clickWorkspaceControl(page,'format-redo');await settled();expect(await source()).toBe(pasted);
     await createMarkdownCopy(page);
     await expect.poll(async()=>(await snapshot(id)).snapshot.copyState.state).toBe('created-confirmed');
     const after=(await snapshot(id)).snapshot;receipt=after.copyState;bytes=await fs.readFile(receipt.filePath);
@@ -2359,7 +2361,7 @@ test('writing boundaries V1 splits joins and exits lists with exact export reope
     await selectDocument(page,originalId);expect((await snapshot(originalId)).snapshot.source).toBe(before);
     await selectDocument(page,id);await page.keyboard.press('Escape');
     await page.locator('#new-temporary').click();const blankId=await page.locator('#documents').inputValue();
-    await page.locator('#editor p').click();await page.locator('#format-block').selectOption('bullet-list');
+    await page.locator('#editor p').click();await (await workspaceControl(page,'format-block')).selectOption('bullet-list');
     await expect.poll(async()=>(await snapshot(blankId)).snapshot.source).toBe('- ');
     await page.locator('#editor li p').click();await page.keyboard.press('Enter');
     await expect.poll(async()=>(await snapshot(blankId)).snapshot.source).toBe('');
@@ -2478,7 +2480,7 @@ test('italic V1 toolbar shortcut continuous editing export and readonly reopen',
       await expect.poll(()=>page.locator('#editor .tiptap').evaluate(n=>[n.editor.state.selection.from,n.editor.state.selection.to])).toEqual(positions);
     };
     const key=async(k,expected)=>{await page.keyboard.press(k);await expect.poll(source).toBe(expected);};
-    await range('#editor .tiptap > p:first-of-type',6,10,true);await page.locator('#format-italic').click();
+    await range('#editor .tiptap > p:first-of-type',6,10,true);await clickWorkspaceControl(page,'format-italic');
     const formatted=before.replace('Alpha word','Alpha *word*');await expect.poll(source).toBe(formatted);
     await expect(page.locator('#format-italic')).toHaveAttribute('aria-pressed','true');
     await key('Meta+i',before);await key('Meta+z',formatted);
@@ -2491,7 +2493,7 @@ test('italic V1 toolbar shortcut continuous editing export and readonly reopen',
     await range('#editor li:first-child p',3,9,true);
     await page.locator('#editor .tiptap').evaluate(n=>{const data=new DataTransfer();data.setData('text/plain','单行');n.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));});
     const pasted=typed.replace('st *ita','单行*');await expect.poll(source).toBe(pasted);await key('Meta+z',typed);
-    await range('#editor li:nth-child(2) strong',0,4);await page.locator('#format-italic').click();await settled();expect(await source()).toBe(typed);await expect(page.locator('#viewer-status')).toContainText('暂不支持叠加');
+    await range('#editor li:nth-child(2) strong',0,4);await clickWorkspaceControl(page,'format-italic');await settled();expect(await source()).toBe(typed);await expect(page.locator('#viewer-status')).toContainText('暂不支持叠加');
     await selectDocument(page,originalId);expect((await snapshot(originalId)).snapshot.source).toBe(before);await selectDocument(page,id);await page.keyboard.press('Escape');
     expect(await source()).toBe(typed);await createMarkdownCopy(page);
     await expect.poll(async()=>(await snapshot(id)).snapshot.copyState.state).toBe('created-confirmed');
@@ -2530,7 +2532,7 @@ test('code V1 toolbar shortcut continuous editing export and readonly reopen',as
       await expect.poll(()=>page.locator('#editor .tiptap').evaluate(n=>[n.editor.state.selection.from,n.editor.state.selection.to])).toEqual(positions);
     };
     const key=async(k,expected)=>{await page.keyboard.press(k);await expect.poll(source).toBe(expected);};
-    await range('#editor .tiptap > p:first-of-type',6,10,true);await page.locator('#format-code').click();
+    await range('#editor .tiptap > p:first-of-type',6,10,true);await clickWorkspaceControl(page,'format-code');
     const formatted=before.replace('Alpha word','Alpha `word`');await expect.poll(source).toBe(formatted);
     await expect(page.locator('#format-code')).toHaveAttribute('aria-pressed','true');
     await key('Meta+e',before);await key('Meta+z',formatted);
@@ -2543,7 +2545,7 @@ test('code V1 toolbar shortcut continuous editing export and readonly reopen',as
     await range('#editor li:first-child p',3,9,true);
     await page.locator('#editor .tiptap').evaluate(n=>{const data=new DataTransfer();data.setData('text/plain','单行');n.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));});
     const pasted=typed.replace('st `cod','单行`');await expect.poll(source).toBe(pasted);await key('Meta+z',typed);
-    await range('#editor li:nth-child(2) strong',0,4);await page.locator('#format-code').click();await settled();expect(await source()).toBe(typed);await expect(page.locator('#viewer-status')).toContainText('暂不支持叠加');
+    await range('#editor li:nth-child(2) strong',0,4);await clickWorkspaceControl(page,'format-code');await settled();expect(await source()).toBe(typed);await expect(page.locator('#viewer-status')).toContainText('暂不支持叠加');
     await selectDocument(page,originalId);expect((await snapshot(originalId)).snapshot.source).toBe(before);await selectDocument(page,id);await page.keyboard.press('Escape');
     expect(await source()).toBe(typed);await createMarkdownCopy(page);
     await expect.poll(async()=>(await snapshot(id)).snapshot.copyState.state).toBe('created-confirmed');
@@ -2643,7 +2645,7 @@ test('block input V1 blank draft heading list typing history export and reopen',
     await page.keyboard.insertText('末尾');await expect.poll(source).toBe(base+'###### 末尾');
     await page.locator('#editor h6').evaluate(p=>{p.closest('.tiptap').focus();const s=getSelection();s.collapse(p.firstChild,0);document.dispatchEvent(new Event('selectionchange'));});
     await page.keyboard.press('Backspace');await expect.poll(source).toBe(base+'末尾');
-    await page.locator('#format-block').selectOption('heading-4');await expect.poll(source).toBe(base+'#### 末尾');
+    await (await workspaceControl(page,'format-block')).selectOption('heading-4');await expect.poll(source).toBe(base+'#### 末尾');
     const final=await source();await createMarkdownCopy(page);
     await expect.poll(async()=>(await snapshot(id)).snapshot.copyState.state).toBe('created-confirmed');
     const saved=(await snapshot(id)).snapshot;receipt=saved.copyState;bytes=await fs.readFile(receipt.filePath);
@@ -2688,7 +2690,7 @@ test('link panel V1 insert edit cancel remove stale guard export and reopen',asy
   await page.locator('#link-apply').click();const created=before.replace('word','[word](<https://example.test/created>)');
   await expect(page.locator('#link-dialog')).not.toBeVisible();await expect.poll(source).toBe(created);
   await key('Meta+z',before);await key('Meta+Shift+z',created);
-  await range('#editor .tiptap > p:first-of-type [data-document-link]',2);await page.locator('#format-link').click();
+  await range('#editor .tiptap > p:first-of-type [data-document-link]',2);await clickWorkspaceControl(page,'format-link');
   await page.locator('#link-href').fill('#cancelled');await page.keyboard.press('Escape');await expect(page.locator('#link-dialog')).not.toBeVisible();expect(await source()).toBe(created);
   // Existing title bytes are retained when the address is changed.
   await range('#editor .tiptap > p:nth-of-type(2) [data-document-link]',2);await page.keyboard.press('Meta+k');
@@ -2738,8 +2740,8 @@ test('quote code V1 natural creation editing history export and reopen',async({}
   await page.keyboard.press('Meta+z');await expect.poll(source).toBe(base);await page.keyboard.press('Meta+Shift+z');await expect.poll(source).toBe(pasted);
   await page.keyboard.press('Meta+Enter');await page.keyboard.type('After code');await expect.poll(source).toBe(pasted+'\n\nAfter code');
   // Same toolbar handles conversion back to prose, without touching the previous code.
-  await page.locator('#format-block').selectOption('blockquote');await expect.poll(source).toBe(pasted+'\n\n> After code');
-  await page.locator('#format-block').selectOption('paragraph');const final=pasted+'\n\nAfter code';await expect.poll(source).toBe(final);
+  await (await workspaceControl(page,'format-block')).selectOption('blockquote');await expect.poll(source).toBe(pasted+'\n\n> After code');
+  await (await workspaceControl(page,'format-block')).selectOption('paragraph');const final=pasted+'\n\nAfter code';await expect.poll(source).toBe(final);
   await createMarkdownCopy(page);
   await expect.poll(async()=>(await snapshot(id)).snapshot.copyState.state).toBe('created-confirmed');const saved=(await snapshot(id)).snapshot;receipt=saved.copyState;bytes=await fs.readFile(receipt.filePath);
   expect(bytes).toEqual(Buffer.from(final));expect(hash(bytes)).toBe(receipt.sha256);expect(saved.dirty).toBe(true);

@@ -1,3 +1,4 @@
+const {clickWorkspaceControl} = require('./helpers/document-workspace-control.cjs');
 const {focusNativeWindow,settleNativeCaret}=require('./helpers/document-native-selection.cjs');
 const {createMarkdownCopy}=require('./helpers/document-file-actions.cjs');
 const {test,expect,_electron}=require('@playwright/test');
@@ -43,8 +44,8 @@ test('structure continuation workflow: linked boundaries, quote joins, table pro
   const paragraph=page.locator('#editor .tiptap > p').filter({hasText:'A word Z'});
   await select(paragraph,'word',2);await page.keyboard.press('Enter');
   const split='A **[wo](word "keep")**'+nl+nl+'**[rd](word "keep")** Z';expected=expected.replace(prose,split);await check();
-  await page.keyboard.press('Backspace');expected=source;await check();await page.locator('#format-undo').click();expected=source.replace(prose,split);await check();
-  await page.locator('#format-redo').click();expected=source;await check();
+  await page.keyboard.press('Backspace');expected=source;await check();await clickWorkspaceControl(page,'format-undo');expected=source.replace(prose,split);await check();
+  await clickWorkspaceControl(page,'format-redo');expected=source;await check();
   const item=page.locator('#editor .tiptap li p').filter({hasText:'taskword'});
   await select(item,'taskword',4);await page.keyboard.press('Enter');
   const splitTask='- [x] **[task](task "task title")**'+nl+'- [ ] **[word](task "task title")**';expected=expected.replace(task,splitTask);await check();
@@ -53,7 +54,7 @@ test('structure continuation workflow: linked boundaries, quote joins, table pro
   expected=expected.replace(splitTask.replace('- [ ] **[word]', '- [ ] **[新word]'),'- [x] **[task新word](task "task title")**');await check();
   const second=page.locator('#editor .tiptap blockquote p').filter({hasText:'second'});await select(second,'second',0);await page.keyboard.press('Backspace');
   const joined='> [**first**](one "keep")'+"*[second](two 'keep')*";expected=expected.replace(quote,joined);await check();
-  const joinedState=expected;await page.locator('#format-undo').click();expected=expected.replace(joined,quote);await check();await page.locator('#format-redo').click();expected=joinedState;await check();
+  const joinedState=expected;await clickWorkspaceControl(page,'format-undo');expected=expected.replace(joined,quote);await check();await clickWorkspaceControl(page,'format-redo');expected=joinedState;await check();
   const header=page.locator('#editor .tiptap th p').first();await select(header,'A',0);await expect(page.locator('#table-before')).toBeEnabled();
   await page.screenshot({path:info.outputPath('table-prose-controls.png')});await page.keyboard.press('Meta+Shift+Enter');
   expected=expected.replace(table,nl+nl+table);await check();await page.keyboard.insertText('表格前言');
@@ -64,7 +65,7 @@ test('structure continuation workflow: linked boundaries, quote joins, table pro
   await select(header,'A',0);await page.keyboard.press('Meta+Enter');expected=expected.replace(table,table+nl+nl);await check();
   await page.keyboard.insertText('表格后续');expected=expected.replace(table+nl+nl+nl+nl+'```js',table+nl+nl+'表格后续'+nl+nl+'```js');await check();
   await select(header,'A',0);revision=(await snap()).revision;await page.locator('#table-exit').click();await check();expect((await snap()).revision).toBe(revision);
-  await page.locator('#show-source').click();await expect(page.locator('#source-editor .cm-content')).toContainText('[**first**](one "keep")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
+  await clickWorkspaceControl(page,'show-source');await expect(page.locator('#source-editor .cm-content')).toContainText('[**first**](one "keep")');await page.keyboard.press('Escape');await check();await backup();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+source);
   await page.locator('#save-original').click();await expect.poll(async()=>(await snap())?.dirty).toBe(false);expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);
   await createMarkdownCopy(page);await expect.poll(async()=>(await snap())?.confirmedCopy?.filePath).toBe(target);expect(await fs.readFile(target,'utf8')).toBe('\ufeff'+expected);await backup();const saved=await snap(),id=await page.evaluate(async label=>(await window.documentDemo.listDrafts()).drafts.find(d=>d.label===label).id,saved.label);
   await page.screenshot({path:info.outputPath('structure-continuation.png')});await stop();await launch();await page.locator('#show-drafts').click();await page.locator(`[data-draft-id="${id}"]`).getByRole('button',{name:'恢复副本'}).click();await check();expect((await snap()).originalSave).toBeNull();expect(await fs.readFile(original,'utf8')).toBe('\ufeff'+expected);expect(errors).toEqual([]);expect(network).toEqual([]);passed=true;

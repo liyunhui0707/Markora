@@ -87,3 +87,22 @@ test('source save applies first, writes only a confirmed candidate, and leaves f
  const failed=fixture(true,async()=>{assert.fail('No disk write before confirmed source');});failed.c.controller={state:()=>failed.c.state,applySource:async()=>false};
  failed.byId('show-source').onclick();failed.buffer().source='Retained source';await failed.view.save();assert.equal(failed.byId('source-dialog').open,true);assert.equal(failed.buffer().source,'Retained source');
 });
+
+test('block source checks confirmed bounds, rejoins only that region and retains stale buffers',async()=>{
+ const f=fixture(true),raw=f.c.state.source,start=raw.indexOf('<'),end=raw.indexOf('>')+1;
+ assert.equal(f.view.openRegion({start:-1,end}),false);
+ assert.equal(f.view.openRegion({start,end:raw.length+1}),false);
+ assert(f.view.openRegion({start,end}));
+ assert.equal(f.view.openRegion({start,end}),false);
+ f.buffer().source='<p>';
+ const expected=raw.slice(0,start)+'<p>'+raw.slice(end);
+ f.c.controller={state:()=>f.c.state,applySource:async source=>{
+  assert.equal(source,expected);f.c.state.source=source;f.c.state.confirmed={...f.c.state.confirmed,source,revision:5};return true;
+ }};
+ await f.byId('apply-source').onclick();
+ assert.equal(f.byId('source-dialog').open,false);
+ assert(f.view.openRegion({start,end:start+3}));
+ f.buffer().source='<b>';f.c.state.confirmed.revision++;f.view.sync();
+ assert(f.byId('apply-source').disabled);await f.byId('apply-source').onclick();
+ assert.equal(f.buffer().source,'<b>');assert.equal(f.c.state.source,expected);
+});
