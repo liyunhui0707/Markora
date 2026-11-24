@@ -1,7 +1,7 @@
-# Markora CLI 与 MCP 伴侣
+# markora CLI 与 MCP 伴侣
 
-让 AI 或命令行生成 Markdown 后，立即交给已安装的 Markora。伴侣工具为 0.2.0，
-配合 App 0.82.0；它独立于 App 安装包，不改变应用身份、草稿、保存权限或已发布 ZIP。
+让 AI 或命令行生成 Markdown 后，立即交给已安装的 markora。伴侣工具为 0.2.1，
+配合 App 0.82.1；它独立于 App 安装包，不改变应用身份、草稿、保存权限或已发布 ZIP。
 
 ## 命令
 
@@ -30,7 +30,7 @@ App 仍通过原有的原生打开队列和输入保护处理请求，可能等�
 
 ## 安装
 
-需要 macOS、Node 24+、已安装的 Markora，以及已经存在、归当前用户所有的普通 Inbox。
+需要 macOS、Node 24+、已安装的 markora，以及已经存在、归当前用户所有的普通 Inbox。
 App 本身继续独立运行，不要求 Node。
 
 从仓库根目录执行：
@@ -39,7 +39,7 @@ App 本身继续独立运行，不要求 Node。
 node integrations/markora/install.cjs
 ```
 
-安装器只创建 `~/.local/share/markora/0.2.0` 与 `~/.local/bin/markora`，不覆盖已有安装。
+安装器只创建 `~/.local/share/markora/0.2.1` 与 `~/.local/bin/markora`，不覆盖已有安装。
 运行文件、共享容量规则、许可、配置与哈希清单一起复制；命令不依赖源码目录、
 `node_modules` 或临时测试目录。安装使用执行安装器的既有 Node，不下载运行时。
 需要让 `~/.local/bin` 已位于 PATH 中；安装回执会报告这一状态，不修改 shell 配置。
@@ -47,7 +47,7 @@ node integrations/markora/install.cjs
 源码运行时可显式选择位置：
 
 ```sh
-node integrations/markora/cli.cjs --app "/path/Markora.app" --inbox "/existing/Inbox" status
+node integrations/markora/cli.cjs --app "/path/markora.app" --inbox "/existing/Inbox" status
 ```
 
 固定 Inbox 限当前用户主目录内、非隐藏、非敏感、不可被其他用户写入的普通目录。

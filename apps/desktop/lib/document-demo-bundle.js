@@ -18644,7 +18644,7 @@
 
   // lib/document-file-presentation.mjs
   function fileWindowTitle(current) {
-    if (!current) return "Markora";
+    if (!current) return "markora";
     return current.label + (current.temporary ? current.linkedFile ? "" : " \u2014 \u8349\u7A3F" : " \u2014 \u53EA\u8BFB");
   }
   function filePresentation(current, state) {
@@ -66688,7 +66688,7 @@ ${r.visibleText ?? "[unavailable]"}` : ""}`).join("\n\n----\n\n");
       "save-version-list"
     ]) byId(name2).textContent = "";
     document.body.dataset.documentState = "empty";
-    document.title = "Markora";
+    document.title = "markora";
     byId("empty-state").hidden = false;
     for (const name2 of ["open-file", "empty-open", "new-temporary", "documents"]) byId(name2).disabled = false;
     loading = false;
@@ -66953,7 +66953,7 @@ ${r.visibleText ?? "[unavailable]"}` : ""}`).join("\n\n----\n\n");
       closeView.configure();
       recentView.configure(data2);
       byId("open-file").disabled = false;
-      document.title = "Markora";
+      document.title = "markora";
       nativeOpenView.configure();
       accessibility.configure();
     } else byId("connect").disabled = false;

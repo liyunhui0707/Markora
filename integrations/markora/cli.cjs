@@ -2,7 +2,7 @@
 'use strict';
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {createBridge,BridgeError,MAX_DOCUMENT_BYTES}=require('./bridge.cjs');
-const help=`markora — Markora CLI / MCP companion
+const help=`markora — markora CLI / MCP companion
 兼容命令：mdapp（相同参数与行为）
 
   markora status                       查询已安装 App 和固定 Inbox
@@ -11,13 +11,13 @@ const help=`markora — Markora CLI / MCP companion
   markora create --name 文件.md --stdin --no-open
   markora mcp                          启动本地 stdio MCP server
 
-全局参数（放在命令之前）：--app /path/Markora.app --inbox /existing/Inbox
+全局参数（放在命令之前）：--app /path/markora.app --inbox /existing/Inbox
 已有文件不会覆盖。普通命令输出 JSON；MCP 模式只输出协议消息。
 需要 Node 24+；App 本身仍可独立使用。\n`;
 function parse(argv){
  let settings={};const settingsFile=path.join(__dirname,'config.json');
  if(fs.existsSync(settingsFile))settings=JSON.parse(fs.readFileSync(settingsFile,'utf8'));
- const home=os.homedir(),config={home,app:settings.app||path.join(home,'Applications/Markora.app'),inbox:settings.inbox||path.join(home,'Liyunhui/Inbox')};
+ const home=os.homedir(),config={home,app:settings.app||path.join(home,'Applications/markora.app'),inbox:settings.inbox||path.join(home,'Liyunhui/Inbox')};
  while(['--app','--inbox'].includes(argv[0])){const k=argv.shift().slice(2),v=argv.shift();if(!v||!path.isAbsolute(v))throw new BridgeError('invalid-options');config[k]=v;}
  const command=argv.shift()||'help';return {config,command,args:argv};
 }

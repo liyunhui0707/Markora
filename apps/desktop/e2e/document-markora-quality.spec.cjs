@@ -2,9 +2,9 @@ const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
 const {createSaveFolderFixture}=require('../test/helpers/save-folder-fixture.cjs');
 const {stopOwnedElectron}=require('./helpers/document-owned-stop.cjs');
-test('Markora quality workflow: semantic preview, heading range, quiet status, source save and reopen',async({},info)=>{
+test('markora quality workflow: semantic preview, heading range, quiet status, source save and reopen',async({},info)=>{
  test.setTimeout(120000);if(!process.env.E2E_ELECTRON_EXECUTABLE)throw Error('Isolated Electron required');
- await fs.mkdir(info.outputDir,{recursive:true});const folder=createSaveFolderFixture(info.outputDir),file=path.join(folder.dir,'Markora synthetic.md');
+ await fs.mkdir(info.outputDir,{recursive:true});const folder=createSaveFolderFixture(info.outputDir),file=path.join(folder.dir,'markora synthetic.md');
  const root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'document-safe-create-markora-')));
  const source='# Title **bold**\r\n\r\nOther *text*\r\n\r\n---\r\n\r\nEscaped \\*star\\* &amp;.\r\n\r\n[Reference][id]\r\n\r\n> Outer\r\n>\r\n> - child\r\n\r\n[id]: https://example.test "Keep"';
  await fs.writeFile(file,source,{flag:'wx',mode:0o600});let app,page,exit,passed=false;const errors=[],network=[],exits=[];
@@ -16,7 +16,7 @@ test('Markora quality workflow: semantic preview, heading range, quiet status, s
    env:{PATH:'/usr/bin:/bin:/usr/sbin:/sbin',LANG:'en_US.UTF-8',TMPDIR:os.tmpdir()},chromiumSandbox:true});
   exit=new Promise(resolve=>app.process().once('close',(code,signal)=>resolve({code,signal})));page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(/^https?:/.test(r.url()))network.push(r.url());});
   await app.evaluate(({dialog,BrowserWindow},file)=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});dialog.showMessageBox=async()=>({response:1});dialog.showMessageBoxSync=()=>1;const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1280,850);w.show();},file);
-  await expect(page.locator('.sidebar-brand strong')).toHaveText('Markora');await page.locator('#empty-open').click();await expect.poll(async()=>(await snap())?.source).toBe(source);
+  await expect(page.locator('.sidebar-brand strong')).toHaveText('markora');await page.locator('#empty-open').click();await expect.poll(async()=>(await snap())?.source).toBe(source);
   await expect(page.locator('#editor .document-preview hr')).toHaveCount(1);await expect(page.locator('#editor .document-preview')).toContainText(['Escaped *star* &.','Reference','Outer']);
   expect(await page.locator('#editor .document-preview [href], #editor .document-preview img').count()).toBe(0);
   const beforeTitle=await page.title();await page.locator('#editor h1').click();

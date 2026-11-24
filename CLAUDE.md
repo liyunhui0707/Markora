@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 **Git workflow (2026-11-16).** Use the canonical local checkout at
-`/Users/liyunhui/Liyunhui/Codes/markdown-vault-app` and follow
+`/Users/liyunhui/Liyunhui/Github/markora` and follow
 [Git management](docs/git-workflow.md). Keep coherent tested checkpoints, one
 short branch/PR per functional group, required CI before integration and daily-App
 replacement, then main synchronization and authorized branch cleanup. The old

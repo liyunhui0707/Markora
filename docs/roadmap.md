@@ -1,4 +1,4 @@
-# Project Roadmap — Markora
+# Project Roadmap — markora
 
 ## Current direction (2026-11-18)
 
@@ -17,7 +17,7 @@ The older phase table below is historical. The 2026-11-18 release policy removes
 personal trial acceptance as a prerequisite; paid signing/notarization remains
 deferred. Current work follows the four quality stages immediately below.
 
-### Current batch — four quality stages and Markora, 0.82.0
+### Current batch — four quality stages and markora, 0.82.0
 
 See the [approved TDD boundaries](audits/2026-11-18-writing-quality-plan.md).
 The accepted visual base and source-preserving architecture remain in place.
@@ -27,7 +27,7 @@ The accepted visual base and source-preserving architecture remain in place.
 | 1. Stable, quiet writing | Complete PM/schema comparison without disposable trees; independently checked exact splice hints; stable document title, concise protected-edit source action; bounded failed synthetic-test shutdown. Keep the unchanged raw-rate test and 64-entry protection. |
 | 2. Common semantic display | Inert read-only previews for rules, escapes/entities, autolinks/reference links and mixed quotes/lists, including nested definitions. HTML remains source; no automatic URL navigation or resource fetching. Exact editable spans stay separate. |
 | 3. Continuous authoring | Selected replacement/deletion and multi-paragraph plain paste across ordinary top-level prose and ATX headings; preserve first block type, lexical frames, newline spelling, exact inverses and full native PM equality. Existing container/table boundaries remain guarded and have lifecycle regression coverage. |
-| 4. Delivery and identity | Markora App/icon, companion 0.2.0, repository rename and canonical checkout at `/Users/liyunhui/Liyunhui/Github/Markora`; keep bundle/profile identity and `mdapp` compatibility. Full CI, artifact/install verification and release remain required. Other providers/filesystems are demand-led follow-up work, not newly granted save authority. |
+| 4. Delivery and identity | markora App/icon, companion 0.2.0, repository rename and canonical checkout at `/Users/liyunhui/Liyunhui/Github/markora`; keep bundle/profile identity and `mdapp` compatibility. Full CI, artifact/install verification and release remain required. Other providers/filesystems are demand-led follow-up work, not newly granted save authority. |
 
 Local focused TDD and native-visible synthetic workflows are development evidence.
 The historical 0.81.0 raw-rate CI failure stays retained. A local successful raw
