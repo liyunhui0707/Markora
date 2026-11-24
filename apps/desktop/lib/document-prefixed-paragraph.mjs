@@ -4,6 +4,11 @@ import remarkGfm from 'remark-gfm';
 import {projectArticle,renderArticleParts} from './document-article-source.mjs';
 import {inlineFrames,renderInlineParts} from './document-inline-tree.mjs';
 const parser=unified().use(remarkParse).use(remarkGfm);
+// Walk the current physical line only, including in files with mixed line endings.
+export function physicalLineStart(source,offset){
+ while(offset>0&&source[offset-1]!=='\n'&&source[offset-1]!=='\r')offset--;
+ return offset;
+}
 // Remove only the independently proven physical continuation prefix. Project
 // one virtual paragraph, then map every lexical offset back to the original.
 // A newline and its prefix remain one source-only soft/hard-break token.

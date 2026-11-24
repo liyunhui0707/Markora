@@ -13,6 +13,9 @@ export function applyBlockShortcut(view, event, context) {
   if(!empty||$from.parent.type.name!=='paragraph') return false;
   const task=$from.depth>1&&$from.node($from.depth-1).type.name==='listItem'&&event.key===' ';
   if(!task&&$from.depth!==1)return false;
+  // All supported shortcut prefixes fit in three backticks and a 32-unit language.
+  // Ordinary Space/Enter in longer prose needs no source-format plan.
+  if($from.parentOffset>35)return false;
   const command={action:task?'task-shortcut':event.key==='Enter'?'fence-shortcut':'block-shortcut',from,to},mapped=mapFormatEdit(s.source,command);
   if(!mapped.ok) return false;
   const doc=view.state.schema.nodeFromJSON(mapped.projection.doc);

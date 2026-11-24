@@ -9,6 +9,7 @@ function sameValue(a,b){
  return keys.length===other.length&&keys.every(k=>Object.hasOwn(b,k)&&sameValue(a[k],b[k]));
 }
 function sameAttrs(actual,json,type){
+ if(json==null&&actual===type.defaultAttrs)return true;
  if(json!=null&&(typeof json!=='object'||Array.isArray(json)))return false;
  if(json&&Object.keys(json).some(k=>!Object.hasOwn(type.attrs,k)))return false;
  for(const key of Object.keys(type.attrs)){
@@ -42,6 +43,18 @@ export function matchesPMProjection(node,json,schema=node?.type?.schema){
  if(json.text!==undefined)return false;
  const children=json.content===undefined?[]:json.content;
  if(!Array.isArray(children))return false;
+ // Canonicalization can only reduce the number of children. With equal counts
+ // every projected child must match one complete PM child, including its text.
+ if(children.length===node.childCount){
+  let previous=null;
+  for(let i=0;i<children.length;i++){
+   const child=node.child(i);
+   if(child.isText&&previous?.isText&&child.sameMarkup(previous))return false;
+   if(!matchesPMProjection(child,children[i],schema))return false;
+   previous=child;
+  }
+  return true;
+ }
  let actualIndex=0;
  for(let i=0;i<children.length;){
   const actual=node.maybeChild(actualIndex++),child=children[i];if(!actual)return false;

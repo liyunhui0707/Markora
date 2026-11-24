@@ -1,5 +1,35 @@
 import { TextSelection } from '@tiptap/pm/state';
 
+// On long articles a native DOM edit followed by PM's mutation reconciliation
+// can keep the renderer busy throughout a burst. When a second edit is already
+// waiting behind the in-flight one, submit a proven plain caret directly to PM.
+export function insertPlainTextAtCaret(view,event,{state,blocked=false}) {
+  if (event.inputType !== 'insertText' || !event.isTrusted || !event.cancelable || event.defaultPrevented
+      || typeof event.data !== 'string' || event.data.length !== 1 || !/[A-Za-z0-9 ]/.test(event.data)
+      || event.isComposing || event.keyCode === 229 || view.composing || !view.editable || !view.hasFocus()
+      || blocked || !state || state.pending < 2 || state.source.length < 8192 || state.confirmed.readOnly || state.locked
+      || state.composing || state.compositionInvalid || state.historyPending || state.recoveryRecords.length) return false;
+  const selection = view.state.selection;
+  if (!(selection instanceof TextSelection) || !selection.empty
+      || !['paragraph','heading'].includes(selection.$from.parent.type.name)
+      || (view.state.storedMarks ?? selection.$from.marks()).length) return false;
+  try {
+    const dom = view.dom.ownerDocument.getSelection(), ranges = event.getTargetRanges?.();
+    const text = dom?.anchorNode, offset = dom?.anchorOffset;
+    if (!dom?.isCollapsed || dom.rangeCount !== 1 || text?.nodeType !== 3 || !view.dom.contains(text)
+        || dom.focusNode !== text || dom.focusOffset !== offset || ranges?.length !== 1) return false;
+    const [target] = ranges;
+    if (target.startContainer !== text || target.endContainer !== text
+        || target.startOffset !== offset || target.endOffset !== offset) return false;
+    const start = view.posAtDOM(text, 0), leaf = view.state.doc.nodeAt(start);
+    if (view.posAtDOM(text, offset) !== selection.from || start + offset !== selection.from
+        || view.nodeDOM(start) !== text || !leaf?.isText || leaf.marks.length || leaf.text !== text.data) return false;
+  } catch { return false; }
+  event.preventDefault();
+  view.dispatch(view.state.tr.insertText(event.data).scrollIntoView());
+  return true;
+}
+
 // Chromium's cross-block DOM replacement can reparse adjacent opaque blocks.
 // Capture only a matching native text selection before mutation; dispatch through
 // the same controller/source-map gate. No clipboard, IME or Markdown parsing here.

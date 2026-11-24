@@ -30,7 +30,7 @@ import { createOriginalSaveView } from './document-original-save-view.mjs';
 import { createTestCopyView } from './document-test-copy-view.mjs';
 import { createEditController } from './document-edit-controller.mjs';
 import { pastePlainText } from './document-plain-paste.mjs';
-import { replaceParagraphRangeInput } from './document-paragraph-input.mjs';
+import { insertPlainTextAtCaret, replaceParagraphRangeInput } from './document-paragraph-input.mjs';
 import { createWritingShell } from './document-writing-shell.mjs';
 import { createRecentView } from './document-recent-view.mjs';
 import { createDraftView } from './document-draft-view.mjs';
@@ -318,9 +318,9 @@ function install(snapshot) {
           if (event.inputType === 'insertParagraph' && (event.isComposing || _view.composing || controller?.state().composing)) {
             event.preventDefault(); return true;
           }
-          if (applyBoundarySpace(_view,event,{state:controller?.state(),blocked:activeInvalid()||loading||readOnlyDocument(),report:viewerStatus})) return true;
-          if (replaceParagraphRangeInput(_view, event, { state: controller?.state(),
-            blocked: activeInvalid() || loading || readOnlyDocument(), report: viewerStatus })) return true;
+          const inputContext = {state:controller?.state(),blocked:activeInvalid()||loading||readOnlyDocument(),report:viewerStatus};
+          if (applyBoundarySpace(_view,event,inputContext) || insertPlainTextAtCaret(_view,event,inputContext)
+              || replaceParagraphRangeInput(_view,event,inputContext)) return true;
           if (!['historyUndo', 'historyRedo'].includes(event.inputType)) return false;
           event.preventDefault(); void history(event.inputType === 'historyUndo' ? 'undo' : 'redo'); return true;
         },

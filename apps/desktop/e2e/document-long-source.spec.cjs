@@ -78,9 +78,15 @@ test('long article: filtered outline, readonly exact source and return to writin
     await page.locator('#show-source').click(); expect(await page.locator('#source-text').textContent()).toBe('');
     await page.keyboard.press('Escape');
     await page.locator('#editor .tiptap').dispatchEvent('compositionstart',{data:''});
-    await expect(page.locator('#show-source')).toBeDisabled();
-    await page.evaluate(()=>document.querySelector('#show-source').onclick()); await expect(page.locator('#source-dialog')).toBeHidden();
-    await page.locator('#editor .tiptap').dispatchEvent('compositionend',{data:''});
+    try {
+      await expect(page.locator('#status')).toContainText('"composing":true');
+      await expect(page.locator('#show-source')).toBeEnabled();
+      await page.evaluate(()=>document.querySelector('#show-source').onclick());
+      await expect(page.locator('#workflow-status')).toContainText('请先完成当前选词');
+      await expect(page.locator('#source-dialog')).toBeHidden();
+    } finally {
+      await page.locator('#editor .tiptap').dispatchEvent('compositionend',{data:''});
+    }
     await expect(page.locator('#show-source')).toBeEnabled();
     expect(await fs.readFile(original)).toEqual(bytes); expect(faults).toEqual([]); expect(requests).toEqual([]);
     await fs.writeFile(info.outputPath('evidence.json'),JSON.stringify({ok:true,root,bytes:bytes.length,headings:201,metrics,

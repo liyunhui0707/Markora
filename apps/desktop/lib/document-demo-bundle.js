@@ -16459,6 +16459,10 @@
 
   // lib/document-prefixed-paragraph.mjs
   var parser = unified().use(remarkParse).use(remarkGfm);
+  function physicalLineStart(source, offset) {
+    while (offset > 0 && source[offset - 1] !== "\n" && source[offset - 1] !== "\r") offset--;
+    return offset;
+  }
   function projectPrefixedParagraph(source, from2, to, prefix2, position2, blockIndex) {
     const raw = source.slice(from2, to), map4 = [], pieces = [];
     let at = from2, logical = 0;
@@ -16546,7 +16550,7 @@
       for (const [siblingIndex, item3] of list3.children.entries()) {
         if (items.length >= 32) return null;
         const a = item3.position.start.offset, b = item3.position.end.offset;
-        const lineFrom = Math.max(source.lastIndexOf("\n", a - 1), source.lastIndexOf("\r", a - 1)) + 1;
+        const lineFrom = physicalLineStart(source, a);
         const indent2 = source.slice(lineFrom, a);
         if (!/^ *$/.test(indent2)) return null;
         const lineEnd2 = a + (source.slice(a, b).search(/[\r\n]/) < 0 ? b - a : source.slice(a, b).search(/[\r\n]/));
@@ -16676,7 +16680,8 @@
   }
   var complex = (n) => n.type === "list" && n.children.some((i) => i.children.filter((c) => c.type === "paragraph").length > 1 || i.children.some(complex)) || n.type === "blockquote" && n.children.some((c) => c.type === "blockquote");
   function projectComplexContainer(node2, source, position2, blockIndex) {
-    const lineStart = (at) => Math.max(source.lastIndexOf("\n", at - 1), source.lastIndexOf("\r", at - 1)) + 1, tails = /* @__PURE__ */ new Map();
+    if (node2.type !== "list" && node2.type !== "blockquote") return null;
+    const lineStart = (at) => physicalLineStart(source, at), tails = /* @__PURE__ */ new Map();
     let looseChild = false;
     function pendingList(n, depth2 = 0) {
       if (n.type !== "list" || depth2 >= 6) return;
@@ -17788,6 +17793,7 @@
   var inline2 = (text5) => text5 ? [{ type: "text", text: text5 }] : [];
   var literalBlockPrefix = (text5) => /^(?:>|`{1,2}|```[A-Za-z0-9_+-]{0,32})$/.test(text5);
   function projectStructuredBlock(node2, source, position2, blockIndex) {
+    if (node2.type !== "code" && node2.type !== "blockquote") return null;
     const start = node2.position.start.offset, end = node2.position.end.offset, raw = source.slice(start, end);
     const endings = raw.match(/\r\n|\n|\r/g) || [], nl = endings[0] || "\n";
     if (endings.some((s) => s !== nl)) return null;
@@ -52947,6 +52953,7 @@
   function createReadingView({ byId: byId2, context }) {
     let enabled = false, preferences = { ...defaultReading }, opened = false;
     let mappedDoc = null, mappedSession = null, rows = [], scheduled = false, activeRow = null, filterComposing = false;
+    let filteredRows = null, filteredQuery = null;
     const system = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
     const narrow = globalThis.matchMedia?.("(max-width: 1179px)");
     const app = byId2("writing-app"), doc4 = app.ownerDocument, scroll = byId2("document-scroll");
@@ -53040,6 +53047,9 @@
     }
     function filterRows() {
       const query = filter.value.trim().toLocaleLowerCase();
+      if (filteredRows === rows && filteredQuery === query) return;
+      filteredRows = rows;
+      filteredQuery = query;
       let count2 = 0;
       for (const row of rows) {
         row.button.hidden = !row.item.title.toLocaleLowerCase().includes(query);
@@ -53147,7 +53157,7 @@
           byId2("outline-list").replaceChildren(...rows.map((r) => r.button));
         }
       }
-      for (const row of rows) row.button.disabled = !ready;
+      for (const row of rows) if (row.button.disabled !== !ready) row.button.disabled = !ready;
       filterRows();
       showOutline(opened);
       scheduleActive();
@@ -64551,6 +64561,7 @@ SHA-256: ${last.sha256}` : "";
     return keys2.length === other.length && keys2.every((k) => Object.hasOwn(b, k) && sameValue(a[k], b[k]));
   }
   function sameAttrs(actual, json, type) {
+    if (json == null && actual === type.defaultAttrs) return true;
     if (json != null && (typeof json !== "object" || Array.isArray(json))) return false;
     if (json && Object.keys(json).some((k) => !Object.hasOwn(type.attrs, k))) return false;
     for (const key2 of Object.keys(type.attrs)) {
@@ -64585,6 +64596,16 @@ SHA-256: ${last.sha256}` : "";
     if (json.text !== void 0) return false;
     const children = json.content === void 0 ? [] : json.content;
     if (!Array.isArray(children)) return false;
+    if (children.length === node2.childCount) {
+      let previous3 = null;
+      for (let i = 0; i < children.length; i++) {
+        const child = node2.child(i);
+        if (child.isText && previous3?.isText && child.sameMarkup(previous3)) return false;
+        if (!matchesPMProjection(child, children[i], schema)) return false;
+        previous3 = child;
+      }
+      return true;
+    }
     let actualIndex = 0;
     for (let i = 0; i < children.length; ) {
       const actual = node2.maybeChild(actualIndex++), child = children[i];
@@ -64711,7 +64732,7 @@ SHA-256: ${last.sha256}` : "";
         source,
         code: code3,
         recoveryDraft: recoveries.at(-1)?.source || "",
-        recoveryRecords: structuredClone(recoveries),
+        recoveryRecords: recoveries.length ? structuredClone(recoveries) : [],
         pending: queue.length,
         inputPaused: inputPaused(),
         composing: !!composition,
@@ -65161,6 +65182,25 @@ SHA-256: ${last.sha256}` : "";
   }
 
   // lib/document-paragraph-input.mjs
+  function insertPlainTextAtCaret(view, event, { state, blocked = false }) {
+    if (event.inputType !== "insertText" || !event.isTrusted || !event.cancelable || event.defaultPrevented || typeof event.data !== "string" || event.data.length !== 1 || !/[A-Za-z0-9 ]/.test(event.data) || event.isComposing || event.keyCode === 229 || view.composing || !view.editable || !view.hasFocus() || blocked || !state || state.pending < 2 || state.source.length < 8192 || state.confirmed.readOnly || state.locked || state.composing || state.compositionInvalid || state.historyPending || state.recoveryRecords.length) return false;
+    const selection = view.state.selection;
+    if (!(selection instanceof TextSelection) || !selection.empty || !["paragraph", "heading"].includes(selection.$from.parent.type.name) || (view.state.storedMarks ?? selection.$from.marks()).length) return false;
+    try {
+      const dom = view.dom.ownerDocument.getSelection(), ranges = event.getTargetRanges?.();
+      const text5 = dom?.anchorNode, offset = dom?.anchorOffset;
+      if (!dom?.isCollapsed || dom.rangeCount !== 1 || text5?.nodeType !== 3 || !view.dom.contains(text5) || dom.focusNode !== text5 || dom.focusOffset !== offset || ranges?.length !== 1) return false;
+      const [target] = ranges;
+      if (target.startContainer !== text5 || target.endContainer !== text5 || target.startOffset !== offset || target.endOffset !== offset) return false;
+      const start = view.posAtDOM(text5, 0), leaf = view.state.doc.nodeAt(start);
+      if (view.posAtDOM(text5, offset) !== selection.from || start + offset !== selection.from || view.nodeDOM(start) !== text5 || !leaf?.isText || leaf.marks.length || leaf.text !== text5.data) return false;
+    } catch {
+      return false;
+    }
+    event.preventDefault();
+    view.dispatch(view.state.tr.insertText(event.data).scrollIntoView());
+    return true;
+  }
   function replaceParagraphRangeInput(view, event, { state, blocked = false, report = () => {
   } }) {
     const keyDelete = ["Backspace", "Delete"].includes(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
@@ -65202,6 +65242,7 @@ SHA-256: ${last.sha256}` : "";
   function createWritingShell({ byId: byId2, context, refreshDrafts = () => {
   }, reading = null, sourceView: sourceView2 = null }) {
     let enabled = false, previousSession = null;
+    const characterCounts = /* @__PURE__ */ new WeakMap();
     const metadata = /* @__PURE__ */ new Map(), rows = /* @__PURE__ */ new Map();
     const blocked = () => {
       const { loading: loading2, state: s } = context();
@@ -65362,7 +65403,12 @@ SHA-256: ${last.sha256}` : "";
       byId2("empty-new").disabled = !!blocked() || byId2("new-temporary").disabled;
       for (const id2 of ["toggle-session-sidebar", "close-session-sidebar", "session-filter", "sidebar-scrim"]) byId2(id2).disabled = !!(context().loading || s?.historyPending || s?.compositionInvalid || s?.composing);
       byId2("reading-mode").hidden = !current?.readOnly;
-      byId2("document-statistics").textContent = current ? current.source.replace(/\s/gu, "").length.toLocaleString() + " \u5B57\u7B26 \xB7 Markdown" : "Markdown";
+      let count2 = characterCounts.get(current);
+      if (current && count2 === void 0) {
+        count2 = current.source.replace(/\s/gu, "").length.toLocaleString();
+        characterCounts.set(current, count2);
+      }
+      byId2("document-statistics").textContent = current ? count2 + " \u5B57\u7B26 \xB7 Markdown" : "Markdown";
       if (current?.sessionId !== previousSession) {
         byId2("document-scroll").scrollTop = 0;
         byId2("session-filter").value = "";
@@ -65373,7 +65419,7 @@ SHA-256: ${last.sha256}` : "";
       byId2("details-document-kind").textContent = file.kind;
       byId2("details-document-location").textContent = file.location;
       byId2("details-document-revision").textContent = String(current?.revision ?? "\u2014");
-      byId2("details-document-count").textContent = current ? current.source.replace(/\s/gu, "").length.toLocaleString() : "\u2014";
+      byId2("details-document-count").textContent = count2 ?? "\u2014";
       byId2("details-backup-card").hidden = !current?.temporary;
       syncNavigation();
       reading?.sync();
@@ -65774,6 +65820,7 @@ SHA-256: ${last.sha256}` : "";
     if (!empty5 || $from.parent.type.name !== "paragraph") return false;
     const task = $from.depth > 1 && $from.node($from.depth - 1).type.name === "listItem" && event.key === " ";
     if (!task && $from.depth !== 1) return false;
+    if ($from.parentOffset > 35) return false;
     const command3 = { action: task ? "task-shortcut" : event.key === "Enter" ? "fence-shortcut" : "block-shortcut", from: from2, to }, mapped = mapFormatEdit(s.source, command3);
     if (!mapped.ok) return false;
     const doc4 = view.state.schema.nodeFromJSON(mapped.projection.doc);
@@ -66431,12 +66478,8 @@ ${r.visibleText ?? "[unavailable]"}` : ""}`).join("\n\n----\n\n");
               event.preventDefault();
               return true;
             }
-            if (applyBoundarySpace(_view, event, { state: controller?.state(), blocked: activeInvalid() || loading || readOnlyDocument(), report: viewerStatus })) return true;
-            if (replaceParagraphRangeInput(_view, event, {
-              state: controller?.state(),
-              blocked: activeInvalid() || loading || readOnlyDocument(),
-              report: viewerStatus
-            })) return true;
+            const inputContext = { state: controller?.state(), blocked: activeInvalid() || loading || readOnlyDocument(), report: viewerStatus };
+            if (applyBoundarySpace(_view, event, inputContext) || insertPlainTextAtCaret(_view, event, inputContext) || replaceParagraphRangeInput(_view, event, inputContext)) return true;
             if (!["historyUndo", "historyRedo"].includes(event.inputType)) return false;
             event.preventDefault();
             void history3(event.inputType === "historyUndo" ? "undo" : "redo");

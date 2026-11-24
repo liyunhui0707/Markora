@@ -1,11 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {getSchema} from '@tiptap/core';
+import {Fragment} from '@tiptap/pm/model';
 import {documentEditorExtensions} from '../lib/document-editor-extensions.mjs';
 import {projectSource} from '../lib/document-source-map.mjs';
 import {matchesPMProjection} from '../lib/document-pm-projection.mjs';
 
 const schema=getSchema(documentEditorExtensions());
+test('equal child counts still reject an unmerged PM text run',()=>{
+ const json={type:'paragraph',content:[{type:'text',text:'a'},{type:'text',text:'b'}]};
+ const unmerged=schema.nodes.paragraph.create(null,new Fragment([schema.text('a'),schema.text('b')]));
+ assert.equal(unmerged.childCount,2);
+ assert(!matchesPMProjection(unmerged,json));
+ assert(matchesPMProjection(schema.nodeFromJSON(json),json));
+});
 test('nested preview attribute arrays compare their complete length as well as values',()=>{
  const json=projectSource('Escape \\*text\\* &amp;.').doc,pm=schema.nodeFromJSON(json),changed=structuredClone(json);
  changed.content[0].attrs.tree.children.length++;

@@ -88,7 +88,7 @@ export function createEditController(initial, { send, onChange = () => {}, onRes
     recoveries.push(record); return record;
   }
   function state() { return { confirmed, source, code, recoveryDraft: recoveries.at(-1)?.source || '',
-    recoveryRecords: structuredClone(recoveries), pending: queue.length, inputPaused: inputPaused(),
+    recoveryRecords: recoveries.length ? structuredClone(recoveries) : [], pending: queue.length, inputPaused: inputPaused(),
     composing: !!composition, compositionInvalid: !!composition?.invalid, recoveryCopyCapacity: atCapacity(), historyPending, syncLocked: locked || disposed || atCapacity(), locked: locked || disposed || atCapacity() || inputPaused() }; }
   const notify = () => { if (!disposed) onChange(state()); };
   const settle = () => { if (!flight && !queue.length) for (const resolve of waiters.splice(0)) resolve(); };
