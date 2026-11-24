@@ -14557,6 +14557,32 @@
     function inline5(n, marks2, path2) {
       if (!n.position) return null;
       const a = n.position.start.offset, b = n.position.end.offset, raw = source.slice(a, b);
+      function atom(kind, tree) {
+        pos++;
+        return { type: "inlineDocumentPreview", attrs: { kind, tree }, ...marks2.length ? { marks: marks2 } : {} };
+      }
+      if (n.type === "inlineMath" || n.type === "footnoteReference")
+        return [atom(n.type, extensionTree(n, null, 0, source))];
+      if (n.type === "html") return [atom("html", { tag: "code", children: [raw] })];
+      if (n.type === "text" && raw.includes("[[")) {
+        const wiki = extensionTree(n, null, 0, source);
+        if (wiki) {
+          const result = [];
+          let cursor = a;
+          for (const part of wiki.children) {
+            if (typeof part === "string") {
+              result.push(...text5(part, { start: cursor }, marks2, [...path2.slice(0, -1), path2.at(-1) + result.length]));
+              cursor += part.length;
+            } else {
+              const close2 = source.indexOf("]]", cursor + 2);
+              if (close2 < cursor || close2 + 2 > b) return null;
+              result.push(atom("wiki", part));
+              cursor = close2 + 2;
+            }
+          }
+          return result;
+        }
+      }
       if (n.type === "text") {
         const value = n.value.replace(/\r\n?|\n/g, " ");
         return text5(value, decodedOffsets(raw, value, a), marks2, path2);
@@ -16007,11 +16033,35 @@
   // lib/document-source-map.mjs
   var { MAX_SOURCE_UNITS: MAX_SOURCE_UNITS4 } = import_document_capacity9.default;
   var spanBlock = (projection, span) => span.containerPath ? containerNodeAt(projection.doc.content[span.blockIndex], span.containerPath) : span.tableRow !== void 0 ? projection.doc.content[span.blockIndex].content[span.tableRow].content[span.tableCol].content[0] : span.itemIndex === void 0 ? span.quoteIndex === void 0 ? projection.doc.content[span.blockIndex] : projection.doc.content[span.blockIndex].content[span.quoteIndex] : listNodeAt(projection.doc.content[span.blockIndex], span.itemPath ?? [span.itemIndex]).content[0];
-  var parser2 = unified().use(remarkParse).use(remarkGfm).use(remarkMathDelimiters);
+  function positionedAutolinks() {
+    for (const group of this.data("fromMarkdownExtensions")) {
+      for (const extension2 of [group].flat(Infinity)) {
+        if (extension2.enter?.literalAutolink) delete extension2.transforms;
+      }
+    }
+  }
+  var parser2 = unified().use(remarkParse).use(remarkGfm).use(positionedAutolinks).use(remarkMathDelimiters);
   var parse2 = createSourceParser((source) => includeProtocolPrefixes(parser2.parse(source), source));
   var unsafe = () => ({ ok: false, code: "unsafe-source-range" });
   var validText2 = (s) => typeof s === "string" && !/[\0\r\n]/.test(s) && s.isWellFormed();
   var splits2 = (s, n) => n > 0 && n < s.length && /[\uD800-\uDBFF]/.test(s[n - 1]) && /[\uDC00-\uDFFF]/.test(s[n]);
+  function inlineRowRange(source, offset) {
+    function visit2(node2) {
+      if (!node2.position || offset < node2.position.start.offset || offset > node2.position.end.offset) return null;
+      if (["paragraph", "heading"].includes(node2.type) && node2.position.start.line === node2.position.end.line) {
+        const first2 = node2.children[0], last = node2.children.at(-1);
+        if (!first2?.position || !last?.position) return null;
+        const end = last.position.end.offset;
+        return { start: first2.position.start.offset, end: /^ +$/.test(source.slice(end, node2.position.end.offset)) ? node2.position.end.offset : end };
+      }
+      for (const child of node2.children || []) {
+        const range = visit2(child);
+        if (range) return range;
+      }
+      return null;
+    }
+    return visit2(parse2(source));
+  }
   function projectSource(source, spliceHint) {
     if (typeof source !== "string" || source.length > MAX_SOURCE_UNITS4) throw Error("Unsupported source");
     const frame = source.startsWith("---") && source.match(/^---(?:\r\n|\n|\r)([\s\S]*?)(?:\r\n|\n|\r)---(?=\r\n|\n|\r|$)/);
@@ -16082,6 +16132,19 @@
         continue;
       }
       const kind = extensionKind(node2, source.slice(start, end));
+      if (kind && ["paragraph", "heading"].includes(node2.type)) {
+        const extra = projectExtended(node2, source, position2, definitions);
+        if (extra) {
+          const { doc: doc4, size, ...mapping } = extra;
+          regions.push({ kind, start, end, index: content5.length, position: position2 });
+          extended2.push({ ...mapping, index: content5.length });
+          blocks.push(null);
+          content5.push(doc4);
+          position2 += size;
+          previousEnd = end;
+          continue;
+        }
+      }
       if (kind) {
         const preview = semanticPreview(node2, definitions, source);
         if (preview) {
@@ -16501,6 +16564,8 @@
       const code3 = document.createElement("code");
       code3.textContent = source;
       element2.replaceChildren(error, code3);
+    } finally {
+      if (isCurrent()) element2.dispatchEvent(new Event("markora-preview-rendered", { bubbles: true }));
     }
   }
   function renderExtensions(root2, isCurrent = () => true) {
@@ -19942,7 +20007,8 @@
     "unsupported-path": "\u8BF7\u9009\u62E9\u666E\u901A .md \u6587\u4EF6\u3002",
     "unsupported-file": "\u7B26\u53F7\u94FE\u63A5\u3001\u786C\u94FE\u63A5\u548C\u975E\u666E\u901A\u6587\u4EF6\u6682\u4E0D\u652F\u6301\u3002",
     "unsupported-size": "\u6587\u4EF6\u8D85\u8FC7\u5F53\u524D\u5927\u5C0F\u9650\u5236\u3002",
-    "parse-failed": "\u5185\u5BB9\u8D85\u8FC7\u5F53\u524D\u9884\u89C8\u9650\u5236\u3002",
+    "parse-failed": "\u65E0\u6CD5\u89E3\u6790\u6B64\u6587\u6863\u3002",
+    "unsupported-length": "\u6B63\u6587\u8D85\u8FC7 524,288 \u4E2A UTF-16 \u5355\u5143\u3002",
     "unsupported-encoding": "\u76EE\u524D\u4EC5\u652F\u6301 UTF-8 Markdown\u3002",
     "file-unavailable": "\u6587\u4EF6\u5DF2\u4E0D\u5B58\u5728\u3002",
     "read-failed": "\u65E0\u6CD5\u8BFB\u53D6\u6587\u4EF6\uFF0C\u8BF7\u68C0\u67E5\u8BBF\u95EE\u6743\u9650\u3002",
@@ -21188,48 +21254,100 @@
     return result;
   }
   function mapInlineTyping(source, { action, from: from2, to, insert: insert2 }) {
-    if (!Number.isSafeInteger(from2) || from2 !== to || typeof insert2 !== "string" || insert2.length > 2 || !insert2.isWellFormed() || Array.from(insert2).length !== 1 || /[\p{Cc}\u2028\u2029]/u.test(insert2) || source.length + insert2.length > MAX_SOURCE_UNITS11) return reject13();
+    if (!Number.isSafeInteger(from2) || from2 !== to || typeof insert2 !== "string" || insert2.length > 2 || !insert2.isWellFormed() || Array.from(insert2).length !== 1 && !(action === "autolink-input" && insert2 === "") || /[\p{Cc}\u2028\u2029]/u.test(insert2) || source.length + insert2.length > MAX_SOURCE_UNITS11) return reject13();
     const closing = { "*": ["bold", "italic"], "_": ["bold", "italic"], "~": ["strike"], "`": ["code"], ")": ["link"] };
     if (action === "inline-close" && !Object.hasOwn(closing, insert2)) return reject13();
     const original = projectSource(source);
-    const block = original.blocks.find((b) => b && from2 === b.to - 1) || original.extended?.find((b) => from2 === b.to - 1);
-    if (!block || block.sourceTo - block.sourceFrom > 4096) return reject13();
-    const index2 = block.index ?? original.blocks.indexOf(block), old = original.doc.content[index2];
-    if (old.type !== "paragraph") return reject13();
-    const raw = source.slice(block.sourceFrom, block.sourceTo), end = block.sourceTo;
-    if (!raw || /[\r\n]/.test(raw)) return reject13();
-    const single = projectSource(raw).doc.content;
-    if (single.length !== 1 || !equalCanonicalProjection(old, single[0])) return reject13();
-    const local = projectSource(raw + insert2).doc.content;
-    if (local.length !== 1 || local[0].type !== "paragraph") return reject13();
-    const children = local[0].content, last = children.at(-1);
-    if (action === "inline-close") {
-      if (!last?.marks?.some((m) => closing[insert2].includes(m.type))) return reject13();
-    } else {
-      if (!old.content.at(-1)?.marks?.length || !equalCanonicalProjection(local[0], {
-        ...old,
-        content: [...old.content, { type: "text", text: insert2 }]
-      })) return reject13();
+    const extended2 = original.extended?.find((b) => from2 > b.from && from2 < b.to);
+    const span = original.spans.find((s) => from2 > s.from && from2 <= s.to) ?? original.spans.find((s) => from2 === s.from);
+    const leaf = span ?? extended2?.leaves.find((l) => from2 >= l.from && from2 <= l.to);
+    if (!leaf) return reject13();
+    const index2 = span?.blockIndex ?? extended2.index, top2 = original.blocks[index2] ?? extended2;
+    const offset = from2 - leaf.from, point3 = span ? span.sourceFrom + offset : leaf.offsets ? leaf.offsets[offset] : leaf.start + offset;
+    if (!Number.isSafeInteger(point3)) return reject13();
+    const range = inlineRowRange(source, point3);
+    if (!range || range.end - range.start > 4096) return reject13();
+    const raw = source.slice(range.start, range.end);
+    const path2 = [];
+    function within(node2, start) {
+      if (node2.type === "paragraph" || node2.type === "heading") return { node: node2, start };
+      if (!["bulletList", "orderedList", "listItem", "blockquote"].includes(node2.type)) return null;
+      let pos = start + 1;
+      for (const [i, child] of node2.content.entries()) {
+        const size = sizeOf(child);
+        if (from2 > pos && from2 < pos + size) {
+          path2.push(i);
+          return within(child, pos);
+        }
+        pos += size;
+      }
+      return null;
     }
-    const next = source.slice(0, end) + insert2 + source.slice(end);
-    const projection = projectSource(next), expected = { ...original.doc, content: original.doc.content.slice() };
-    expected.content[index2] = local[0];
+    function sizeOf(n) {
+      if (n.type === "text") return n.text.length;
+      return n.content ? 2 + n.content.reduce((sum, c) => sum + sizeOf(c), 0) : 1;
+    }
+    const row = within(original.doc.content[index2], top2.from);
+    if (!row || !row.node.content.every((n) => n.type === "text")) return reject13();
+    const old = paragraph8(row.node.content), before = projectSource(raw).doc.content;
+    if (before.length !== 1 || !equalCanonicalProjection(old, before[0])) return reject13();
+    const offsetInRow = from2 - row.start - 1, visible = old.content.map((n) => n.text).join("");
+    const suffix = visible.slice(offsetInRow);
+    let end = suffix ? point3 : range.end;
+    if (suffix && span && from2 === span.to && action === "inline-after")
+      end = span.frames?.[0]?.to ?? span.linkSource?.to ?? point3 + (span.bold ? 2 : span.italic || span.code ? 1 : 0);
+    if (end < range.start || end > range.end) return reject13();
+    const removed = action === "autolink-input" && !insert2 ? Array.from(source.slice(range.start, end)).at(-1) : "";
+    if (removed === void 0) return reject13();
+    const at = end - removed.length, nextRaw = source.slice(range.start, at) + insert2 + source.slice(end, range.end);
+    const local = projectSource(nextRaw).doc.content;
+    if (local.length !== 1 || local[0].type !== "paragraph" || !local[0].content.every((n) => n.type === "text")) return reject13();
+    const children = local[0].content, afterText = children.map((n) => n.text).join("");
+    if (!afterText.endsWith(suffix)) return reject13();
+    const caretOffset = afterText.length - suffix.length;
+    let length = 0;
+    const previous4 = children.find((n) => (length += n.text.length) >= caretOffset);
+    if (action === "inline-close") {
+      if (caretOffset < 1 || !previous4?.marks?.some((m) => closing[insert2].includes(m.type))) return reject13();
+    } else {
+      let markRuns = function(nodes2) {
+        const runs = [];
+        for (const node2 of nodes2) {
+          const marks2 = (node2.marks ?? []).filter((mark2) => !auto || !bare(node2, mark2));
+          const key2 = JSON.stringify(marks2);
+          for (let i = 0; i < node2.text.length; i++) runs.push(key2);
+        }
+        return runs;
+      };
+      const auto = action === "autolink-input";
+      const bare = (node2, mark2) => mark2.type === "link" && [node2.text, "http://" + node2.text, "mailto:" + node2.text].includes(mark2.attrs.href);
+      if (auto && ![...old.content, ...children].some((n) => n.marks?.some((m) => bare(n, m)))) return reject13();
+      if (!auto && (!old.content.some((n) => n.marks?.length) || previous4?.marks?.length)) return reject13();
+      if (afterText !== visible.slice(0, offsetInRow - removed.length) + insert2 + suffix) return reject13();
+      const expectedMarks = markRuns(old.content), actualMarks = markRuns(children);
+      expectedMarks.splice(offsetInRow - removed.length, removed.length, ...Array(insert2.length).fill("[]"));
+      if (expectedMarks.some((key2, i) => key2 !== actualMarks[i])) return reject13();
+    }
+    const next = source.slice(0, at) + insert2 + source.slice(end), projection = projectSource(next);
+    const expected = { ...original.doc, content: original.doc.content.slice() };
+    expected.content[index2] = structuredClone(expected.content[index2]);
+    let target = expected.content[index2];
+    for (const step of path2) target = target.content[step];
+    target.content = children;
     if (!equalCanonicalProjection(expected, projection.doc)) return reject13();
-    const after = projection.blocks[index2] || projection.extended?.find((b) => b.index === index2);
-    if (!after) return reject13();
-    const caret = after.to - 1;
+    const caret = row.start + 1 + caretOffset;
     return {
       ok: true,
       source: next,
       projection,
-      change: { from: end, to: end, insert: insert2 },
-      inverseSource: { from: end, to: end + insert2.length, insert: "" },
+      change: { from: at, to: end, insert: insert2 },
+      inverseSource: { from: at, to: at + insert2.length, insert: removed },
       selection: { from: caret, to: caret }
     };
   }
   function mapFormatEdit(source, command3) {
     if (!command3 || Object.getPrototypeOf(command3) !== Object.prototype) return reject13();
-    if (["inline-close", "inline-after", "table-paste"].includes(command3.action)) {
+    if (["inline-close", "inline-after", "autolink-input", "table-paste"].includes(command3.action)) {
       if (Object.keys(command3).length !== 4 || !["action", "from", "to", "insert"].every((k) => Object.hasOwn(command3, k))) return reject13();
       if (command3.action === "table-paste") return mapTablePaste(source, projectSource(source), command3, projectSource);
       return mapInlineTyping(source, command3);
@@ -26976,7 +27094,7 @@
   // lib/document-find-view.mjs
   var FIND_LIMIT = 1e3;
   var FIND_QUERY_LIMIT = 256;
-  function findDocumentText(doc4, query, matchCase = false) {
+  function findDocumentText(doc4, query, matchCase = false, previewTree = (node2) => node2.attrs.tree) {
     const matches2 = [];
     let total = 0;
     if (!query || query.length > FIND_QUERY_LIMIT) return { matches: matches2, total };
@@ -26994,13 +27112,16 @@
         } : { from: start + hit.index, to: start + hit.index + hit[0].length });
       }
     }
+    function scanPreview(node2, pos) {
+      let offset = 0;
+      for (const run3 of previewTextRuns(previewTree(node2, pos))) {
+        scan(run3, pos, offset);
+        offset += run3.length;
+      }
+    }
     doc4.descendants((node2, pos) => {
       if (node2.type.name === "documentPreview") {
-        let offset = 0;
-        for (const run3 of previewTextRuns(node2.attrs.tree)) {
-          scan(run3, pos, offset);
-          offset += run3.length;
-        }
+        scanPreview(node2, pos);
         return false;
       }
       if (!node2.isTextblock) return;
@@ -27012,6 +27133,7 @@
         } else {
           scan(text5, start);
           text5 = "";
+          if (child.type.name === "inlineDocumentPreview") scanPreview(child, pos + 1 + offset);
         }
       });
       scan(text5, start);
@@ -27020,6 +27142,21 @@
     return { matches: matches2, total };
   }
   var key = new PluginKey("documentFind");
+  function mathLeaves(element2) {
+    const root2 = element2?.querySelector("math semantics > :first-child");
+    if (!root2) return [];
+    const walker = root2.ownerDocument.createTreeWalker(root2, 4), nodes2 = [];
+    while (walker.nextNode()) nodes2.push(walker.currentNode);
+    return nodes2;
+  }
+  function renderedTree(tree, dom) {
+    if (typeof tree === "string") return tree;
+    if (tree.formula !== void 0) {
+      const nodes2 = mathLeaves(dom);
+      if (nodes2.length) return { ...tree, children: nodes2.map((node2) => node2.data) };
+    }
+    return { ...tree, children: tree.children.map((child, i) => renderedTree(child, dom?.childNodes[i])) };
+  }
   function previewRange(view, hit) {
     if (!hit?.preview) return null;
     const model = view.state.doc.nodeAt(hit.from), dom = view.nodeDOM(hit.from);
@@ -27035,6 +27172,13 @@
         }
         offset = limit;
         return;
+      }
+      if (tree.formula !== void 0) {
+        const leaves = mathLeaves(node2);
+        if (leaves.length) {
+          for (const leaf of leaves) visit2(leaf.data, leaf);
+          return;
+        }
       }
       const matching = node2?.localName === tree.tag && tree.formula === void 0 && tree.diagram === void 0;
       for (const [i, child] of tree.children.entries()) visit2(child, matching ? node2.childNodes[i] : null);
@@ -27083,6 +27227,12 @@
       activeRange = previewRange(editor2.view, matches2[active]);
       if (activeRange && registry) registry.set(previewHighlight, new doc4.defaultView.Highlight(activeRange));
     }
+    byId2("editor").addEventListener("markora-preview-rendered", () => {
+      if (opened) {
+        mapped = null;
+        sync();
+      }
+    });
     function controls(paused = false) {
       for (const id2 of ["find-previous", "find-next"]) byId2(id2).disabled = paused || !matches2.length;
       byId2("find-case").disabled = paused;
@@ -27112,7 +27262,12 @@
       };
       if (!mapped || Object.keys(current).some((k) => current[k] !== mapped[k])) {
         const position2 = mapped?.session === current.session && mapped?.query === current.query ? matches2[active]?.from : null;
-        ({ matches: matches2, total } = findDocumentText(current.doc, current.query, current.matchCase));
+        ({ matches: matches2, total } = findDocumentText(
+          current.doc,
+          current.query,
+          current.matchCase,
+          (node2, pos) => renderedTree(node2.attrs.tree, editor2.view.nodeDOM(pos)?.firstElementChild)
+        ));
         active = matches2.length ? Math.max(0, position2 == null ? 0 : matches2.findIndex((m) => m.from >= position2)) : -1;
         mapped = current;
         publish();
@@ -54189,11 +54344,29 @@
   }
   function documentHeadings(doc4) {
     const headings = [];
-    doc4?.forEach((node2, position2) => {
-      if (node2.type.name === "documentPreview" && /^h[1-6]$/.test(node2.attrs.tree?.tag))
-        headings.push({ position: position2, level: Number(node2.attrs.tree.tag[1]), title: previewTextRuns(node2.attrs.tree).join(" ") || "\u65E0\u6807\u9898", preview: true });
-      if (node2.type.name === "heading" && Number.isInteger(node2.attrs.level) && node2.attrs.level >= 1 && node2.attrs.level <= 6)
-        headings.push({ position: position2, level: node2.attrs.level, title: node2.textContent || "\u65E0\u6807\u9898" });
+    doc4?.descendants((node2, position2) => {
+      if (node2.type.name === "documentPreview") {
+        let visit2 = function(tree) {
+          if (!tree || typeof tree === "string") return;
+          if (/^h[1-6]$/.test(tree.tag)) {
+            headings.push({
+              position: position2,
+              level: Number(tree.tag[1]),
+              title: previewTextRuns(tree).join(" ") || "\u65E0\u6807\u9898",
+              preview: true,
+              ordinal: ordinal++
+            });
+          } else for (const child of tree.children) visit2(child);
+        };
+        let ordinal = 0;
+        visit2(node2.attrs.tree);
+        return false;
+      }
+      if (node2.type.name === "heading") {
+        const title = node2.content.content.map((n) => n.isText ? n.text : n.attrs.tree ? previewTextRuns(n.attrs.tree).join(" ") : "").join("");
+        headings.push({ position: position2, level: node2.attrs.level, title: title || "\u65E0\u6807\u9898" });
+      }
+      return !node2.isTextblock;
     });
     return headings;
   }
@@ -54281,7 +54454,7 @@
       const { editor: editor2, state } = context();
       if (!navigable() || doc4.querySelector("dialog[open]") || state.confirmed.sessionId !== mappedSession || editor2.state.doc !== mappedDoc) return null;
       const block = editor2.view.nodeDOM(item3.position);
-      const node2 = item3.preview ? block?.querySelector("h" + item3.level) : block;
+      const node2 = item3.preview ? block?.querySelectorAll("h1,h2,h3,h4,h5,h6")[item3.ordinal] : block;
       return node2?.nodeName === "H" + item3.level && editor2.view.dom.contains(node2) ? node2 : null;
     }
     function jump(item3) {
@@ -60046,7 +60219,7 @@ img.ProseMirror-separator {
   });
 
   // lib/document-preview-node.mjs
-  var DocumentPreview = Node2.create({
+  var previewOptions = {
     name: "documentPreview",
     group: "block",
     atom: true,
@@ -60074,6 +60247,20 @@ img.ProseMirror-separator {
         "aria-readonly": "true",
         "aria-label": "Markdown \u9884\u89C8\uFF1B\u901A\u8FC7\u6E90\u7801\u7F16\u8F91",
         title: "\u53CC\u51FB\u9884\u89C8\u6216\u6309 Option+Enter \u7F16\u8F91\u6B64\u5904\u6E90\u7801\u3002"
+      }, previewDOMSpec(node2.attrs.tree)];
+    }
+  };
+  var DocumentPreview = Node2.create(previewOptions);
+  var InlineDocumentPreview = Node2.create({
+    ...previewOptions,
+    name: "inlineDocumentPreview",
+    group: "inline",
+    inline: true,
+    renderHTML({ node: node2 }) {
+      return ["span", {
+        "data-inline-preview": "",
+        contenteditable: "false",
+        "aria-label": "\u884C\u5185\u9884\u89C8\uFF1B\u901A\u8FC7\u5757\u6E90\u7801\u7F16\u8F91"
       }, previewDOMSpec(node2.attrs.tree)];
     }
   });
@@ -65446,7 +65633,7 @@ ${prefix2}
     return { ...this.parent?.(), sourceEditable: { default: false, rendered: false } };
   } });
   function documentEditorExtensions(onTaskToggle, imageNodeView = null) {
-    return [DocumentPreview, DocumentImage.configure({ nodeView: imageNodeView }), ...documentTableNodes, DocumentStarterKit.configure({ undoRedo: false, trailingNode: false, link: false, codeBlock: false, listItem: false }), SourceLink, SourceCodeBlock, taskListItem(onTaskToggle)];
+    return [DocumentPreview, InlineDocumentPreview, DocumentImage.configure({ nodeView: imageNodeView }), ...documentTableNodes, DocumentStarterKit.configure({ undoRedo: false, trailingNode: false, link: false, codeBlock: false, listItem: false }), SourceLink, SourceCodeBlock, taskListItem(onTaskToggle)];
   }
 
   // lib/document-copy-actions-view.mjs
@@ -65931,7 +66118,7 @@ SHA-256: ${last.sha256}` : "";
     if (!tr2.docChanged || tr2.steps.length !== 1) return null;
     const shortcut = tr2.getMeta("document-block-shortcut");
     if (shortcut) {
-      if (!["inline-close", "inline-after", "table-paste", "table-add-row", "table-before", "table-exit", "toggle-task", "task-shortcut", "indent-list", "outdent-list", "block-shortcut", "fence-shortcut", "split-quote", "join-quote", "exit-block", "paragraph", "split-heading", "split-list", "join-list", "list-paragraph", "split-paragraph", "join-paragraph"].includes(shortcut.action)) return null;
+      if (!["inline-close", "inline-after", "autolink-input", "table-paste", "table-add-row", "table-before", "table-exit", "toggle-task", "task-shortcut", "indent-list", "outdent-list", "block-shortcut", "fence-shortcut", "split-quote", "join-quote", "exit-block", "paragraph", "split-heading", "split-list", "join-list", "list-paragraph", "split-paragraph", "join-paragraph"].includes(shortcut.action)) return null;
       const mapped2 = mapFormatEdit(source, shortcut), schema2 = tr2.doc.type.schema;
       if (!mapped2.ok || !tr2.before.eq(schema2.nodeFromJSON(projectSource(source).doc)) || !tr2.doc.eq(schema2.nodeFromJSON(mapped2.projection.doc))) return null;
       return { operation: "format", edit: shortcut, source: mapped2.source, structural: true };
@@ -67135,19 +67322,24 @@ SHA-256: ${last.sha256}` : "";
 
   // lib/document-block-input.mjs
   function applyInlineTyping(view, event, { state, blocked }) {
-    if (blocked || !state || !event.isTrusted || event.defaultPrevented || !event.cancelable || event.inputType !== "insertText" || !event.data || event.isComposing || view.composing || event.keyCode === 229 || !view.editable || !view.hasFocus() || state.confirmed.readOnly || state.composing || state.compositionInvalid || state.historyPending || state.locked || state.recoveryRecords.length) return false;
+    const backward = event.inputType === "deleteContentBackward";
+    if (blocked || !state || !event.isTrusted || event.defaultPrevented || !event.cancelable || !backward && (event.inputType !== "insertText" || !event.data) || event.isComposing || view.composing || event.keyCode === 229 || !view.editable || !view.hasFocus() || state.confirmed.readOnly || state.composing || state.compositionInvalid || state.historyPending || state.locked || state.recoveryRecords.length) return false;
     const { selection, storedMarks } = view.state, pos = selection.$from;
-    if (!(selection instanceof TextSelection) || !selection.empty || pos.depth !== 1 || pos.parent.type.name !== "paragraph" || pos.parentOffset !== pos.parent.content.size) return false;
-    const closing = /^[*_~`)]$/.test(event.data);
+    if (!(selection instanceof TextSelection) || !selection.empty || !["paragraph", "heading"].includes(pos.parent.type.name)) return false;
+    const closing = !backward && /^[*_~`)]$/.test(event.data);
     const continued = storedMarks?.length === 0 && pos.nodeBefore?.marks.length > 0;
-    if (!closing && !continued) return false;
+    const left = pos.nodeBefore;
+    const link2 = left?.marks.some((m) => m.type.name === "link");
+    const context = left?.isText && /[@.:/]/.test(left.text.slice(-256)) ? pos.parent.textBetween(Math.max(0, pos.parentOffset - 256), pos.parentOffset, " ", " ") : "";
+    const autolink3 = link2 || !backward && context && /(?:https?:\/\/|www\.|[^\s@]+@[^\s@]+\.)[^\s]*$/i.test(context);
+    if (!closing && !continued && !autolink3) return false;
     const dom = view.dom.ownerDocument.getSelection(), ranges = event.getTargetRanges?.();
     if (!dom?.isCollapsed || dom.rangeCount !== 1 || ranges?.length !== 1) return false;
     const target = ranges[0];
-    if (!view.dom.contains(dom.anchorNode) || dom.anchorNode !== target.startContainer || dom.anchorOffset !== target.startOffset || target.endContainer !== target.startContainer || target.endOffset !== target.startOffset || view.posAtDOM(dom.anchorNode, dom.anchorOffset) !== selection.from) return false;
-    const command3 = { action: closing ? "inline-close" : "inline-after", from: selection.from, to: selection.to, insert: event.data };
+    if (!view.dom.contains(dom.anchorNode) || dom.anchorNode !== target.endContainer || dom.anchorOffset !== target.endOffset || target.endContainer !== target.startContainer || (backward ? target.endOffset - target.startOffset !== 1 : target.endOffset !== target.startOffset) || view.posAtDOM(dom.anchorNode, dom.anchorOffset) !== selection.from) return false;
+    const command3 = { action: closing ? "inline-close" : autolink3 ? "autolink-input" : "inline-after", from: selection.from, to: selection.to, insert: backward ? "" : event.data };
     let plan = mapFormatEdit(state.source, command3);
-    if (!plan.ok && closing && continued) {
+    if (!plan.ok && !backward && continued) {
       command3.action = "inline-after";
       plan = mapFormatEdit(state.source, command3);
     }
@@ -67794,7 +67986,7 @@ ${r.visibleText ?? "[unavailable]"}` : ""}`).join("\n\n----\n\n");
         extensions: [...documentEditorExtensions((view, position2) => applyTaskToggle(view, position2, { controller, loading: loading2, invalid: activeInvalid() }), imagePreviews.nodeView), gate],
         editorProps: {
           attributes: { tabindex: "0" },
-          handleDoubleClickOn: (_view, _pos, node2, nodePos, event) => node2.type.name === "documentPreview" && !event.target.closest("button") && openCurrentBlock(nodePos),
+          handleDoubleClickOn: (_view, _pos, node2, nodePos, event) => ["documentPreview", "inlineDocumentPreview"].includes(node2.type.name) && !event.target.closest("button") && openCurrentBlock(nodePos),
           handleDOMEvents: {
             click: (view, event) => {
               const button = event.target.closest?.("[data-preview-jump]");
@@ -68140,7 +68332,8 @@ ${r.visibleText ?? "[unavailable]"}` : ""}`).join("\n\n----\n\n");
           "read-failed": "\u65E0\u6CD5\u8BFB\u53D6\u6240\u9009\u6587\u4EF6\u3002",
           "unsupported-encoding": "\u76EE\u524D\u4EC5\u652F\u6301 UTF-8 Markdown\u3002",
           "unsupported-size": "\u6587\u4EF6\u8D85\u8FC7 2 MiB \u4E0A\u9650\uFF0C\u65E0\u6CD5\u6253\u5F00\u3002",
-          "parse-failed": "\u5185\u5BB9\u65E0\u6CD5\u89E3\u6790\u6216\u8D85\u8FC7\u7EA6 52 \u4E07\u5B57\u7B26\u7684\u6B63\u6587\u4E0A\u9650\u3002",
+          "parse-failed": "\u65E0\u6CD5\u89E3\u6790\u6B64\u6587\u6863\u3002",
+          "unsupported-length": "\u6B63\u6587\u8D85\u8FC7 524,288 \u4E2A UTF-16 \u5355\u5143\u3002",
           "unsupported-path": "\u8BF7\u9009\u62E9\u4E00\u4E2A\u53D7\u652F\u6301\u7684 .md \u6587\u4EF6\u3002",
           "unsupported-file": "\u8BF7\u9009\u62E9\u666E\u901A\u6587\u4EF6\uFF0C\u7B26\u53F7\u94FE\u63A5\u6682\u4E0D\u652F\u6301\u3002",
           "edit-copy-outcome-unknown": "\u526F\u672C\u521B\u5EFA\u7ED3\u679C\u672A\u77E5\uFF0C\u8BF7\u52FF\u91CD\u590D\u521B\u5EFA\uFF1B\u539F\u6587\u4EF6\u4ECD\u4E3A\u53EA\u8BFB\u3002",

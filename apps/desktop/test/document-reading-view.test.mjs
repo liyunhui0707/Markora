@@ -14,11 +14,11 @@ test('reading options accept only declared display values and preserve defaults'
   for (const [key, value] of [['size','10000'],['font','url(https://example.invalid)'],['width','auto'],['theme','auto'],['__proto__','x'],['path','/tmp']])
     assert.equal(changeReading(result, key, value), result);
 });
-test('outline uses supported headings including links and excludes code, nested headings and frontmatter', () => {
+test('outline uses supported headings including links and includes nested headings and excludes code and frontmatter', () => {
   const source = '\ufeff---\r\nsecret: synthetic\r\n---\r\n# 中文 **标题**\r\n\r\n```md\n# Code heading\n```\n\n## Same\n\n## Same\n\n### [link](https://example.invalid)\n\n> # Nested\n';
   const doc = projected(source.slice(1)), before = doc.toJSON(), rows = documentHeadings(doc);
-  assert.deepEqual(rows.map(r => [r.level,r.title]), [[1,'中文 标题'],[2,'Same'],[2,'Same'],[3,'link']]);
-  assert.equal(new Set(rows.map(r => r.position)).size, 4);
+  assert.deepEqual(rows.map(r => [r.level,r.title]), [[1,'中文 标题'],[2,'Same'],[2,'Same'],[3,'link'],[1,'Nested']]);
+  assert.equal(new Set(rows.map(r => r.position)).size, 5);
   for (const row of rows) assert.equal(doc.nodeAt(row.position).textContent, row.title);
   assert.deepEqual(doc.toJSON(), before); assert.equal(documentHeadings(projected('Only paragraph.')).length, 0);
 });

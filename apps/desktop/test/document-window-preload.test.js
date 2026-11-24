@@ -49,3 +49,25 @@ test('timed-out document close stays open and never replays after a late catalog
  const h=fixture();let release;h.ipc.invoke=(_channel,data)=>data?.operation==='list-recents'?new Promise(r=>release=r):assert.fail('No late document close');
  const recent=h.api.listRecents(),close=h.api.closeDocument({sessionId:'second',expectedRevision:0});h.timers[0]();assert.equal((await close).code,'document-busy');release({ok:true,entries:[]});await recent;
 });
+
+test('inline typing waits for a read, rechecks protection and sends at most once',async()=>{
+ for(const scenario of ['snapshot','list-recents','composition','invalidated','timeout','unknown','edit']){
+  const h=fixture(),sessionId='writing';let release;
+  h.ipc.invoke=(channel,data)=>{
+   h.calls.push({channel,data});
+   return data.operation==='format'?Promise.resolve({ok:true}):new Promise(resolve=>{release=resolve;});
+  };
+  const read=scenario==='edit'?h.api.edit({sessionId}):scenario==='list-recents'||scenario==='unknown'?h.api.listRecents():h.api.snapshot({sessionId});
+  const command={sessionId,expectedRevision:3,action:'autolink-input',from:7,to:7,insert:'.'};
+  const format=h.api.format(command);
+  assert.equal(h.calls.length,1);
+  if(scenario==='composition')h.dom.emit('compositionstart');
+  if(scenario==='invalidated')h.ipc.emit('document-demo:invalidated',{}, {sessionId});
+  if(scenario==='timeout')h.timers[0]();
+  release(scenario==='unknown'?null:{ok:true,entries:[]});await read;
+  const accepted=['snapshot','list-recents'].includes(scenario);
+  assert.equal((await format).ok,accepted,scenario);
+  assert.equal(h.calls.length,accepted?2:1,scenario);
+  if(accepted)assert.deepEqual({...h.calls[1].data},{...command,operation:'format'});
+ }
+});

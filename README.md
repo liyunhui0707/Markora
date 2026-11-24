@@ -4,7 +4,9 @@
 使用源码模式处理完整 Markdown，明确保存，并保留本地草稿和保存版本。
 不需要账号、Vault 或托管服务。
 
-**Markora 0.85.0** 支持在普通段落末尾逐键输入常见行内格式、在表格中粘贴矩形数据，以及精确定位只读预览中的重复文字。发行状态、安装包及适用验收结果以
+[产品官网](https://markora.outerepoch3.chatgpt.site) · [安装指南](docs/install.md) · [格式支持](docs/markdown-compatibility.md)
+
+**Markora 0.86.0** 支持在正文中逐键输入常用链接，在标题、列表和引用中闭合行内格式，并直接修改行内公式、Wiki 和脚注旁的普通文字。发行状态、安装包及适用验收结果以
 [GitHub Releases](https://github.com/liyunhui0707/markora/releases) 为准。
 当前支持 Apple Silicon / arm64。本轮构建采用 ad-hoc 签名，未进行 Developer ID 签名和公证。
 

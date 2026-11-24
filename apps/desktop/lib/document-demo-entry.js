@@ -298,7 +298,7 @@ function install(snapshot) {
     editor = new Editor({ element: byId('editor'), content: projectSource(snapshot.source).doc, enableInputRules: false, enablePasteRules: false,
       extensions: [...documentEditorExtensions((view,position)=>applyTaskToggle(view,position,{controller,loading,invalid:activeInvalid()}),imagePreviews.nodeView), gate],
       editorProps: { attributes: { tabindex: '0' },
-        handleDoubleClickOn:(_view,_pos,node,nodePos,event)=>node.type.name==='documentPreview'&&!event.target.closest('button')&&openCurrentBlock(nodePos),
+        handleDoubleClickOn:(_view,_pos,node,nodePos,event)=>['documentPreview','inlineDocumentPreview'].includes(node.type.name)&&!event.target.closest('button')&&openCurrentBlock(nodePos),
         handleDOMEvents: {
         click: (view,event)=>{
           const button=event.target.closest?.('[data-preview-jump]');
@@ -482,7 +482,7 @@ async function openDocument(temporary = false, editingCopy = false, draftId = nu
     if (!r.ok) {
       const messages = { 'recent-file-unavailable': '最近文档已变化、被移动或无法验证，请通过「打开…」重新选择。', 'recents-unavailable': '最近列表暂不可用，请通过「打开…」选择文件。', 'confirmed-copy-unavailable': '文件已移动、被修改或无法验证，请通过「打开…」重新选择检查。', 'copy-action-unknown': '打开结果尚未确认，请勿重复操作；当前草稿与文件回执仍保留。', 'draft-already-open': '该草稿已在当前窗口打开。', 'draft-unreadable': '草稿无法验证，原记录已保留。', 'draft-read-failed': '草稿读取失败，原记录已保留。', 'draft-unavailable': '草稿已不可用。', 'open-cancelled': '已取消打开。', 'file-unavailable': '所选文件已不存在。',
         'read-failed': '无法读取所选文件。', 'unsupported-encoding': '目前仅支持 UTF-8 Markdown。',
-        'unsupported-size': '文件超过 2 MiB 上限，无法打开。', 'parse-failed': '内容无法解析或超过约 52 万字符的正文上限。',
+        'unsupported-size': '文件超过 2 MiB 上限，无法打开。', 'parse-failed': '无法解析此文档。', 'unsupported-length': '正文超过 524,288 个 UTF-16 单元。',
         'unsupported-path': '请选择一个受支持的 .md 文件。', 'unsupported-file': '请选择普通文件，符号链接暂不支持。',
         'edit-copy-outcome-unknown': '副本创建结果未知，请勿重复创建；原文件仍为只读。',
         'temporary-create-failed': '无法创建独立编辑副本。', 'copy-session-invalidated': '原文会话已不可用。',

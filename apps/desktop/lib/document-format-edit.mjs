@@ -10,7 +10,7 @@ import {mapListEdit} from './document-list-edit.mjs';
 import {mapStructuredEdit} from './document-structured-edit.mjs';
 import { mapLinkEdit } from './document-link-edit.mjs';
 import { mapBoundaryEdit } from './document-boundary-edit.mjs';
-import { projectSource, spanBlock } from './document-source-map.mjs';
+import { projectSource, inlineRowRange, spanBlock } from './document-source-map.mjs';
 import {equalCanonicalProjection} from './document-canonical-equal.mjs';
 import {mapQuotedListBoundary} from './document-extended-source.mjs';
 const reject = () => ({ok:false,code:'unsafe-format-range'});
@@ -31,44 +31,94 @@ function merge(nodes) {
 // Explicit bounded commands. No caller-provided source, source offsets, path or serializer.
 function mapInlineTyping(source,{action,from,to,insert}){
   if(!Number.isSafeInteger(from)||from!==to||typeof insert!=='string'||insert.length>2||!insert.isWellFormed()
-      ||Array.from(insert).length!==1||/[\p{Cc}\u2028\u2029]/u.test(insert)||source.length+insert.length>MAX_SOURCE_UNITS)return reject();
+      ||(Array.from(insert).length!==1&&!(action==='autolink-input'&&insert===''))||/[\p{Cc}\u2028\u2029]/u.test(insert)||source.length+insert.length>MAX_SOURCE_UNITS)return reject();
   const closing={ '*':['bold','italic'],'_':['bold','italic'],'~':['strike'],'`':['code'],')':['link'] };
   if(action==='inline-close'&&!Object.hasOwn(closing,insert))return reject();
   const original=projectSource(source);
-  const block=original.blocks.find(b=>b&&from===b.to-1)||original.extended?.find(b=>from===b.to-1);
-  if(!block||block.sourceTo-block.sourceFrom>4096)return reject();
-  const index=block.index??original.blocks.indexOf(block),old=original.doc.content[index];
-  if(old.type!=='paragraph')return reject();
-  const raw=source.slice(block.sourceFrom,block.sourceTo), end=block.sourceTo;
-  if(!raw||/[\r\n]/.test(raw))return reject();
-  // Isolate the paragraph on both sides. A reference or other surrounding
-  // syntax may change its meaning and must not be guessed by a shortcut.
-  const single=projectSource(raw).doc.content;
-  if(single.length!==1||!equalCanonicalProjection(old,single[0]))return reject();
-  const local=projectSource(raw+insert).doc.content;
-  if(local.length!==1||local[0].type!=='paragraph')return reject();
-  const children=local[0].content, last=children.at(-1);
-  if(action==='inline-close'){
-    if(!last?.marks?.some(m=>closing[insert].includes(m.type)))return reject();
-  }else{
-    if(!old.content.at(-1)?.marks?.length||!equalCanonicalProjection(local[0],{
-      ...old,content:[...old.content,{type:'text',text:insert}]
-    }))return reject();
+  const extended=original.extended?.find(b=>from>b.from&&from<b.to);
+  const span=original.spans.find(s=>from>s.from&&from<=s.to)??original.spans.find(s=>from===s.from);
+  const leaf=span??extended?.leaves.find(l=>from>=l.from&&from<=l.to);
+  if(!leaf)return reject();
+  const index=span?.blockIndex??extended.index, top=original.blocks[index]??extended;
+  const offset=from-leaf.from, point=span?span.sourceFrom+offset:leaf.offsets?leaf.offsets[offset]:leaf.start+offset;
+  if(!Number.isSafeInteger(point))return reject();
+  const range=inlineRowRange(source,point);
+  if(!range||range.end-range.start>4096)return reject();
+  const raw=source.slice(range.start,range.end);
+  const path=[];
+  function within(node,start){
+    if(node.type==='paragraph'||node.type==='heading')return {node,start};
+    if(!['bulletList','orderedList','listItem','blockquote'].includes(node.type))return null;
+    let pos=start+1;
+    for(const [i,child] of node.content.entries()){
+      const size=sizeOf(child);
+      if(from>pos&&from<pos+size){path.push(i);return within(child,pos);}
+      pos+=size;
+    }
+    return null;
   }
-  const next=source.slice(0,end)+insert+source.slice(end);
-  const projection=projectSource(next),expected={...original.doc,content:original.doc.content.slice()};
-  expected.content[index]=local[0];
+  function sizeOf(n){
+    if(n.type==='text')return n.text.length;
+    return n.content?2+n.content.reduce((sum,c)=>sum+sizeOf(c),0):1;
+  }
+  const row=within(original.doc.content[index],top.from);
+  if(!row||!row.node.content.every(n=>n.type==='text'))return reject();
+  const old=paragraph(row.node.content),before=projectSource(raw).doc.content;
+  if(before.length!==1||!equalCanonicalProjection(old,before[0]))return reject();
+  const offsetInRow=from-row.start-1,visible=old.content.map(n=>n.text).join('');
+  const suffix=visible.slice(offsetInRow);
+  // A caret just after a closed frame belongs outside its closing delimiter.
+  let end=suffix?point:range.end;
+  if(suffix&&span&&from===span.to&&action==='inline-after')
+    end=span.frames?.[0]?.to??span.linkSource?.to??(point+(span.bold?2:span.italic||span.code?1:0));
+  if(end<range.start||end>range.end)return reject();
+  const removed=action==='autolink-input'&&!insert?Array.from(source.slice(range.start,end)).at(-1):'';
+  if(removed===undefined)return reject();
+  const at=end-removed.length, nextRaw=source.slice(range.start,at)+insert+source.slice(end,range.end);
+  const local=projectSource(nextRaw).doc.content;
+  if(local.length!==1||local[0].type!=='paragraph'||!local[0].content.every(n=>n.type==='text'))return reject();
+  const children=local[0].content,afterText=children.map(n=>n.text).join('');
+  if(!afterText.endsWith(suffix))return reject();
+  const caretOffset=afterText.length-suffix.length;
+  let length=0;
+  const previous=children.find(n=>(length+=n.text.length)>=caretOffset);
+  if(action==='inline-close'){
+    if(caretOffset<1||!previous?.marks?.some(m=>closing[insert].includes(m.type)))return reject();
+  }else{
+    const auto=action==='autolink-input';
+    const bare=(node,mark)=>mark.type==='link'&&[node.text,'http://'+node.text,'mailto:'+node.text].includes(mark.attrs.href);
+    if(auto&&![...old.content,...children].some(n=>n.marks?.some(m=>bare(n,m))))return reject();
+    if(!auto&&(!old.content.some(n=>n.marks?.length)||previous?.marks?.length))return reject();
+    if(afterText!==visible.slice(0,offsetInRow-removed.length)+insert+suffix)return reject();
+    // Compare marks at every surviving UTF-16 unit. Only a bare address may
+    // acquire or drop its automatic link as the literal characters change.
+    function markRuns(nodes){
+      const runs=[];
+      for(const node of nodes){
+        const marks=(node.marks??[]).filter(mark=>!auto||!bare(node,mark));
+        const key=JSON.stringify(marks);
+        for(let i=0;i<node.text.length;i++)runs.push(key);
+      }
+      return runs;
+    }
+    const expectedMarks=markRuns(old.content),actualMarks=markRuns(children);
+    expectedMarks.splice(offsetInRow-removed.length,removed.length,...Array(insert.length).fill('[]'));
+    if(expectedMarks.some((key,i)=>key!==actualMarks[i]))return reject();
+  }
+  const next=source.slice(0,at)+insert+source.slice(end),projection=projectSource(next);
+  const expected={...original.doc,content:original.doc.content.slice()};
+  expected.content[index]=structuredClone(expected.content[index]);
+  let target=expected.content[index];for(const step of path)target=target.content[step];
+  target.content=children;
   if(!equalCanonicalProjection(expected,projection.doc))return reject();
-  const after=projection.blocks[index]||projection.extended?.find(b=>b.index===index);
-  if(!after)return reject();
-  const caret=after.to-1;
-  return {ok:true,source:next,projection,change:{from:end,to:end,insert},
-    inverseSource:{from:end,to:end+insert.length,insert:''},selection:{from:caret,to:caret}};
+  const caret=row.start+1+caretOffset;
+  return {ok:true,source:next,projection,change:{from:at,to:end,insert},
+    inverseSource:{from:at,to:at+insert.length,insert:removed},selection:{from:caret,to:caret}};
 }
 
 export function mapFormatEdit(source, command) {
   if(!command || Object.getPrototypeOf(command)!==Object.prototype) return reject();
-  if(['inline-close','inline-after','table-paste'].includes(command.action)){
+  if(['inline-close','inline-after','autolink-input','table-paste'].includes(command.action)){
     if(Object.keys(command).length!==4||!['action','from','to','insert'].every(k=>Object.hasOwn(command,k)))return reject();
     if(command.action==='table-paste')return mapTablePaste(source,projectSource(source),command,projectSource);
     return mapInlineTyping(source,command);

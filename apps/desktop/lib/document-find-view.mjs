@@ -8,7 +8,7 @@ export const FIND_LIMIT = 1000;
 export const FIND_QUERY_LIMIT = 256;
 // Search rendered text, preserving PM offsets across inline marks. Never join blocks
 // or inline non-text nodes. Regex metacharacters are always literal user text.
-export function findDocumentText(doc, query, matchCase = false) {
+export function findDocumentText(doc, query, matchCase = false, previewTree = (node)=>node.attrs.tree) {
   const matches = []; let total = 0;
   if (!query || query.length > FIND_QUERY_LIMIT) return { matches, total };
   const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), matchCase ? 'gu' : 'giu');
@@ -20,19 +20,19 @@ export function findDocumentText(doc, query, matchCase = false) {
         offset:previewOffset+hit.index,text:hit[0]} : { from: start + hit.index, to: start + hit.index + hit[0].length });
     }
   }
-  doc.descendants((node, pos) => {
-    if(node.type.name==='documentPreview'){
+  function scanPreview(node,pos){
       let offset=0;
-      for(const run of previewTextRuns(node.attrs.tree)){scan(run,pos,offset);offset+=run.length;}
-      return false;
-    }
+      for(const run of previewTextRuns(previewTree(node,pos))){scan(run,pos,offset);offset+=run.length;}
+  }
+  doc.descendants((node, pos) => {
+    if(node.type.name==='documentPreview'){scanPreview(node,pos);return false;}
     if (!node.isTextblock) return;
     let text = '', start = pos + 1;
     node.forEach((child, offset) => {
       if (child.isText) {
         if (!text) start = pos + 1 + offset;
         text += child.text;
-      } else { scan(text, start); text = ''; }
+      } else { scan(text, start); text = ''; if(child.type.name==='inlineDocumentPreview')scanPreview(child,pos+1+offset); }
     });
     scan(text, start); return false;
   });
@@ -41,6 +41,23 @@ export function findDocumentText(doc, query, matchCase = false) {
 const key = new PluginKey('documentFind');
 // Preview nodes occupy one PM position. Resolve the selected hit against
 // parser-owned text leaves without moving the selection or mutating the DOM.
+// Use the actual presentation MathML. KaTeX also embeds TeX in an annotation,
+// which is source metadata and must not count as a second visible result.
+function mathLeaves(element){
+  const root=element?.querySelector('math semantics > :first-child');
+  if(!root)return [];
+  const walker=root.ownerDocument.createTreeWalker(root,4),nodes=[];
+  while(walker.nextNode())nodes.push(walker.currentNode);
+  return nodes;
+}
+function renderedTree(tree,dom){
+  if(typeof tree==='string')return tree;
+  if(tree.formula!==undefined){
+    const nodes=mathLeaves(dom);
+    if(nodes.length)return {...tree,children:nodes.map(node=>node.data)};
+  }
+  return {...tree,children:tree.children.map((child,i)=>renderedTree(child,dom?.childNodes[i]))};
+}
 function previewRange(view,hit){
   if(!hit?.preview)return null;
   const model=view.state.doc.nodeAt(hit.from),dom=view.nodeDOM(hit.from);
@@ -55,6 +72,10 @@ function previewRange(view,hit){
         if(tail>offset&&tail<=limit)end=[node,tail-offset];
       }
       offset=limit;return;
+    }
+    if(tree.formula!==undefined){
+      const leaves=mathLeaves(node);
+      if(leaves.length){for(const leaf of leaves)visit(leaf.data,leaf);return;}
     }
     const matching=node?.localName===tree.tag&&tree.formula===undefined&&tree.diagram===undefined;
     for(const [i,child] of tree.children.entries())visit(child,matching?node.childNodes[i]:null);
@@ -100,6 +121,9 @@ export function createFindView({ byId, context }) {
     activeRange=previewRange(editor.view,matches[active]);
     if(activeRange&&registry)registry.set(previewHighlight,new doc.defaultView.Highlight(activeRange));
   }
+  byId('editor').addEventListener('markora-preview-rendered',()=>{
+    if(opened){mapped=null;sync();}
+  });
   function controls(paused = false) {
     for (const id of ['find-previous', 'find-next']) byId(id).disabled = paused || !matches.length;
     byId('find-case').disabled = paused;
@@ -124,7 +148,8 @@ export function createFindView({ byId, context }) {
       query: input.value, matchCase: byId('find-case').checked };
     if (!mapped || Object.keys(current).some(k => current[k] !== mapped[k])) {
       const position = mapped?.session === current.session && mapped?.query === current.query ? matches[active]?.from : null;
-      ({ matches, total } = findDocumentText(current.doc, current.query, current.matchCase));
+      ({ matches, total } = findDocumentText(current.doc, current.query, current.matchCase,
+        (node,pos)=>renderedTree(node.attrs.tree,editor.view.nodeDOM(pos)?.firstElementChild)));
       active = matches.length ? Math.max(0, position == null ? 0 : matches.findIndex(m => m.from >= position)) : -1;
       mapped = current; publish();
     }

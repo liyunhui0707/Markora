@@ -80,6 +80,9 @@ static NSDictionary *transaction(NSDictionary *r) {
           if(![r[@"volume"] isEqual:localVolume(directory)])refuse(@"staging-volume-changed");
           swap=-1;stage=prepareStaging(r,target,recovery,&stageRoot,&swap);
         }
+#ifdef DOCUMENT_SAVE_TESTING
+        checkpoint(r,@"before-target-candidate");
+#endif
         candidate=createBytes(swap,"exchanged.md",bytes);
         // Preserve supported native metadata, never drop unknown attributes/ACL.
         if(fcopyfile(original,candidate,NULL,COPYFILE_METADATA)||fchmod(candidate,[baseline[@"identity"][@"mode"] intValue]))refuse(@"metadata-copy-failed");

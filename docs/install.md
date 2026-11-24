@@ -1,6 +1,6 @@
 # 安装、更新与回退
 
-**0.85.0** 的应用名为 `Markora.app`。0.82.1 历史下载保留原名 `markora.app`。打开 App 不需要终端、
+**0.86.0** 的应用名为 `Markora.app`。0.82.1 历史下载保留原名 `markora.app`。打开 App 不需要终端、
 Node.js 或仓库，也不需要选择 Vault。实际发行状态、安装包、校验值和适用验收结果见
 [GitHub Releases](https://github.com/liyunhui0707/markora/releases)。
 本轮为 Apple Silicon / arm64，采用 ad-hoc 完整性签名，未进行 Developer ID 签名和公证。

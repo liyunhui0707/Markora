@@ -69,10 +69,30 @@ cross('staging owner marker changes never grant an exchange or a Finder locator'
 cross('full target volume refuses before exchange while exact local original and draft remain available',async()=>{
  const f=fixture();assert.equal(process.env.DOCUMENT_SYNTHETIC_CAPACITY_VOLUME,volume);const capacity=fs.statfsSync(volume);assert(capacity.bsize*capacity.blocks<=160*1024*1024,'capacity test only accepts bounded synthetic image');
  const body=Buffer.alloc(1536*1024,97);f.request.body=body.toString('base64');f.request.sha256=hash(body);
- const fill=path.join(volume,'capacity-'+randomUUID()),fd=fs.openSync(fill,'wx',0o600),block=require('node:crypto').randomBytes(1024*1024);let full=false;
- try{for(let i=0;i<256;i++){try{fs.writeSync(fd,block);}catch(e){if(e.code!=='ENOSPC')throw e;full=true;break;}}assert(full,'bounded synthetic image must reach ENOSPC');fs.fsyncSync(fd);
-  const r=await run(f);assert.equal(r.ok,false);assert.equal(r.committed,false);assert.deepEqual(fs.readFileSync(f.file),original);assert.deepEqual(fs.readFileSync(path.join(f.recovery,'baseline.md')),original);assert.deepEqual(fs.readFileSync(path.join(f.recovery,'draft.md')),body);
- }finally{fs.ftruncateSync(fd,0);fs.fsyncSync(fd);fs.closeSync(fd);}
+ const fill=path.join(volume,'capacity-'+randomUUID()),fd=fs.openSync(fill,'wx',0o600);
+ const block=require('node:crypto').randomBytes(1024*1024);
+ let checked=false;
+ try{
+  const r=await run(f,{point:'before-target-candidate',hook(){
+   // Keep allocation pressure on this bounded test volume until the actual
+   // candidate write. A failed large append may leave room for smaller writes.
+   assert.deepEqual(fs.readFileSync(path.join(f.recovery,'draft.md')),body);
+   for(const size of [block.length,64*1024,capacity.bsize]){
+    let exhausted=false;
+    for(let allocated=0;allocated<=capacity.blocks*capacity.bsize;){
+     try{const n=fs.writeSync(fd,block,0,size);assert(n>0);allocated+=n;}
+     catch(e){if(e.code!=='ENOSPC')throw e;exhausted=true;break;}
+    }
+    assert(exhausted,'expected ENOSPC for '+size+' byte writes');fs.fsyncSync(fd);
+   }
+   checked=true;
+  }});
+  assert(checked,'must test physical exhaustion at the target candidate write');
+  assert.equal(r.ok,false,JSON.stringify(r));assert.equal(r.committed,false);
+  assert.deepEqual(fs.readFileSync(f.file),original);
+  assert.deepEqual(fs.readFileSync(path.join(f.recovery,'baseline.md')),original);
+  assert.deepEqual(fs.readFileSync(path.join(f.recovery,'draft.md')),body);
+ }finally{fs.closeSync(fd);}
 });
 
 cross('post-exchange staging relocation cannot produce a confirmed save receipt',async()=>{

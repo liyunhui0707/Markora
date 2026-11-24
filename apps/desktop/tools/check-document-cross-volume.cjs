@@ -14,15 +14,28 @@ function detach(){command('/usr/bin/hdiutil',['detach',mount]);mounted=false;}
  command('/usr/bin/hdiutil',['create','-size','128m','-fs','APFS','-type','SPARSE','-volname','MarkdownSynthetic',image]);attach();
  // Warm the freshly built Foundation executable outside measured probe budgets.
  command(path.resolve('build/document-save'),['--inspect-volume',mount]);
- const r=spawnSync(process.execPath,['--test','test/native-cases/document-cross-volume.cjs'],{env:{...process.env,DOCUMENT_CROSS_VOLUME_ROOT:mount,DOCUMENT_SYNTHETIC_CAPACITY_VOLUME:mount},encoding:'utf8',timeout:180000,maxBuffer:16*1024*1024});
- fs.writeFileSync(path.join(evidence,'tests.log'),(r.stdout||'')+(r.stderr||''));process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');if(r.error||r.status!==0)throw Error('cross-volume cases failed');results.nativeCases=true;
+ function nativeCases(capacityOnly){
+  const filter=capacityOnly?'--test-name-pattern=full target volume':'--test-skip-pattern=full target volume';
+  const r=spawnSync(process.execPath,['--test','--test-reporter=tap',filter,'test/native-cases/document-cross-volume.cjs'],{
+   env:{...process.env,DOCUMENT_CROSS_VOLUME_ROOT:mount,DOCUMENT_SYNTHETIC_CAPACITY_VOLUME:mount},
+   encoding:'utf8',timeout:180000,maxBuffer:16*1024*1024});
+  fs.writeFileSync(path.join(evidence,capacityOnly?'capacity.log':'tests.log'),(r.stdout||'')+(r.stderr||''));
+  process.stdout.write(r.stdout||'');process.stderr.write(r.stderr||'');
+  if(r.error||r.status!==0||!/^# skipped 0$/m.test(r.stdout)||
+     !r.stdout.includes(capacityOnly?' - full target volume refuses':' - cross-volume save retains'))
+   throw Error('cross-volume cases failed');
+ }
+ nativeCases(false);results.nativeCases=true;
  if(process.env.E2E_ELECTRON_EXECUTABLE){const ui=spawnSync(process.execPath,['node_modules/@playwright/test/cli.js','test','--config=e2e/playwright.config.cjs','e2e/document-cross-volume.spec.cjs','--workers=1','--output='+path.join(evidence,'electron')],{env:{...process.env,DOCUMENT_CROSS_VOLUME_ROOT:mount},encoding:'utf8',timeout:120000,maxBuffer:16*1024*1024});fs.writeFileSync(path.join(evidence,'electron.log'),(ui.stdout||'')+(ui.stderr||''));process.stdout.write(ui.stdout||'');if(ui.error||ui.status!==0)throw Error('cross-volume Electron workflow failed');results.electron=true;}
 
  const dir=path.join(mount,'reconnect');fs.mkdirSync(dir,{mode:0o700});const file=path.join(dir,'reconnect.md');fs.writeFileSync(file,'Before',{mode:0o600});const root=path.join(evidence,'records'),broker=createOriginalSave({root,binary:path.resolve('build/document-save')});
  const expected=createDocumentFileStore().read(file);expected.filePath=file;const saved=await broker.replace({expected,bytes:Buffer.from('After 中文'),revision:1,isAuthorized:()=>true});if(!saved.ok)throw Error(JSON.stringify(saved));broker.acknowledge(saved.recordId,saved);
  const stage=broker.locateStaging(saved.recordId);results.stage=stage;results.volumeBefore=require('../lib/document-save-locations').inspectLocalVolume(dir);
  detach();if(!broker.list().ok||fs.readFileSync(path.join(broker.locate(saved.recordId),'draft.md'),'utf8')!=='After 中文')throw Error('offline local recovery failed');let refused=false;try{broker.locateStaging(saved.recordId);}catch{refused=true;}if(!refused)throw Error('offline locator accepted');results.offlineLocalRecovery=true;
- attach();if(broker.locateStaging(saved.recordId)!==stage||fs.readFileSync(file,'utf8')!=='After 中文')throw Error('reconnected identity mismatch');results.volumeAfter=require('../lib/document-save-locations').inspectLocalVolume(dir);results.reconnect=true;detach();attach(true);const readonly=JSON.parse(command(path.resolve('build/document-save'),['--inspect-volume',mount]));if(readonly.ok||readonly.code!=='unsupported-filesystem')throw Error('read-only volume accepted');results.readonlyRefused=true;results.ok=true;
+ attach();if(broker.locateStaging(saved.recordId)!==stage||fs.readFileSync(file,'utf8')!=='After 中文')throw Error('reconnected identity mismatch');results.volumeAfter=require('../lib/document-save-locations').inspectLocalVolume(dir);results.reconnect=true;detach();attach(true);const readonly=JSON.parse(command(path.resolve('build/document-save'),['--inspect-volume',mount]));if(readonly.ok||readonly.code!=='unsupported-filesystem')throw Error('read-only volume accepted');results.readonlyRefused=true;
+ // Run physical exhaustion last. Retain the full image as evidence and detach
+ // it without requiring space for a subsequent truncate or another fixture.
+ detach();attach();nativeCases(true);results.fullVolume=true;results.ok=true;
  }catch(e){results.ok=false;results.error=e.message;process.exitCode=1;}
  finally{try{if(mounted)detach();results.detached=true;}catch(e){results.detachError=e.message;process.exitCode=1;}fs.writeFileSync(path.join(evidence,'result.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results));}
 })();
