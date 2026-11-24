@@ -31,6 +31,7 @@ export function activeHeadingIndex(count, topAt, threshold) {
 export function createReadingView({ byId, context }) {
   let enabled = false, preferences = { ...defaultReading }, opened = false;
   let mappedDoc = null, mappedSession = null, rows = [], scheduled = false, activeRow = null, filterComposing = false;
+  let filteredRows = null, filteredQuery = null;
   const system = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
   const narrow = globalThis.matchMedia?.('(max-width: 1179px)');
   const app = byId('writing-app'), doc = app.ownerDocument, scroll = byId('document-scroll');
@@ -118,6 +119,9 @@ export function createReadingView({ byId, context }) {
   }
   function filterRows() {
     const query = filter.value.trim().toLocaleLowerCase();
+    if (filteredRows === rows && filteredQuery === query) return;
+    filteredRows = rows;
+    filteredQuery = query;
     let count = 0;
     for (const row of rows) {
       row.button.hidden = !row.item.title.toLocaleLowerCase().includes(query);
@@ -191,7 +195,7 @@ export function createReadingView({ byId, context }) {
         byId('outline-list').replaceChildren(...rows.map(r => r.button));
       }
     }
-    for (const row of rows) row.button.disabled = !ready;
+    for (const row of rows) if (row.button.disabled !== !ready) row.button.disabled = !ready;
     filterRows();
     showOutline(opened); scheduleActive();
   }

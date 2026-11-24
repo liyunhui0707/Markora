@@ -13,7 +13,7 @@ import {documentEditorExtensions} from '../lib/document-editor-extensions.mjs';
 import {projectSource,mapTextEdit} from '../lib/document-source-map.mjs';
 import {mapFormatEdit} from '../lib/document-format-edit.mjs';
 import {createEditController} from '../lib/document-edit-controller.mjs';
-import {replaceParagraphRangeInput} from '../lib/document-paragraph-input.mjs';
+import {insertPlainTextAtCaret} from '../lib/document-paragraph-input.mjs';
 import {pastePlainText} from '../lib/document-plain-paste.mjs';
 const require=createRequire(import.meta.url),{createDocumentService}=require('../lib/document-service'),{createDocumentSessions}=require('../lib/document-session-ipc');
 const schema=getSchema(documentEditorExtensions()),source='First **bold** tail\r\n\r\nNext [link](target "keep") end';
@@ -48,4 +48,42 @@ test('queued source proof cannot authorize forged acknowledgement identity, cont
   const h=harness('Plain word');h.select(7);h.corrupt(r=>({...r,snapshot:{...r.snapshot,...change}}));h.view.dispatch(h.view.state.tr.insertText('x'));await h.controller.idle();
   const state=h.controller.state();assert.equal(state.code,'ack-mismatch');assert.equal(state.recoveryRecords.length,1);assert.equal(state.recoveryRecords[0].source,'Plain xword');assert.equal(h.document.text,'Plain xword');assert.equal(state.confirmed.source,h.document.text);assert.equal(h.requests.filter(r=>r.operation==='edit').length,1);assert.deepEqual(fs.readFileSync(h.file),h.disk);
  }
+});
+
+test('direct long-article typing requires a matching plain native caret and retains one exact history step',async()=>{
+ const source='Opening.\r\n\r\n'+('Unchanged **中文** and a [link](guide).\r\n\r\n').repeat(220);
+ const h=harness(source),text={nodeType:3,data:'Opening.'},offset=4;
+ h.select(1+offset);
+ Object.assign(h.dom,{anchorNode:text,focusNode:text,anchorOffset:offset,focusOffset:offset});
+ h.view.posAtDOM=(_,n)=>1+n;
+ h.view.nodeDOM=()=>text;
+ const target={startContainer:text,endContainer:text,startOffset:offset,endOffset:offset};
+ let prevented=0;
+ const event={isTrusted:true,cancelable:true,inputType:'insertText',data:'x',
+  getTargetRanges:()=>[target],preventDefault(){prevented++;}};
+ const input=(overrides={},context=h.context())=>insertPlainTextAtCaret(h.view,{...event,...overrides},context);
+ assert.equal(input(),false);
+ // Queue two real edits before yielding the renderer to their acknowledgements.
+ for(const letter of ['1','2']) {
+  h.view.dispatch(h.view.state.tr.insertText(letter,1,1));
+ }
+ h.select(1+offset);
+ text.data='21Opening.';
+ Object.assign(h.dom,{anchorOffset:offset,focusOffset:offset});
+ assert.equal(h.controller.state().pending,2);
+ for(const extra of [{isTrusted:false},{isComposing:true},{keyCode:229},{inputType:'insertReplacementText'},
+  {data:'中文'},{data:'ab'},{getTargetRanges:()=>[]},{getTargetRanges:()=>[{...target,endOffset:offset+1}]}]){
+  assert.equal(input(extra),false);
+ }
+ for(const extra of [{historyPending:true},{confirmed:{readOnly:true}},{recoveryRecords:[{}]},{locked:true}]){
+  assert.equal(input({},{state:{...h.controller.state(),...extra}}),false);
+ }
+ text.data='Stale DOM';assert.equal(input(),false);text.data='21Opening.';
+ h.view.nodeDOM=()=>({});assert.equal(input(),false);h.view.nodeDOM=()=>text;
+ assert.equal(prevented,0);assert.equal(h.requests.length,1);
+ assert(input());await h.controller.idle();
+ assert.equal(prevented,1);assert.equal(h.requests.length,3);assert.equal(h.document.revision,3);
+ assert.equal(h.document.text,'21'+source.replace('Opening.','Opxening.'));
+ assert(await h.controller.history('undo'));assert.equal(h.document.text,'21'+source);
+ assert.deepEqual(fs.readFileSync(h.file),h.disk);
 });

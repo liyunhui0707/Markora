@@ -8,6 +8,7 @@ export const literalBlockPrefix=text=>/^(?:>|`{1,2}|```[A-Za-z0-9_+-]{0,32})$/.t
 // Only explicitly prefixed, single-level quote paragraphs and closed top-level
 // fences. Unsupported/lazy/nested structures remain opaque in the caller.
 export function projectStructuredBlock(node,source,position,blockIndex){
+ if(node.type!=='code'&&node.type!=='blockquote')return null;
  const start=node.position.start.offset,end=node.position.end.offset,raw=source.slice(start,end);
  const endings=raw.match(/\r\n|\n|\r/g)||[],nl=endings[0]||'\n';
  if(endings.some(s=>s!==nl))return null;

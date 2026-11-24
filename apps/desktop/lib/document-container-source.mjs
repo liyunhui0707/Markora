@@ -1,4 +1,4 @@
-import {projectPrefixedParagraph,renderRow,rowParts} from './document-prefixed-paragraph.mjs';
+import {physicalLineStart,projectPrefixedParagraph,renderRow,rowParts} from './document-prefixed-paragraph.mjs';
 import {projectInlineParts,inlineFrames} from './document-inline-tree.mjs';
 import {inlineTextNode} from './document-inline-leaf.mjs';
 
@@ -23,7 +23,8 @@ const complex=n=>n.type==='list'&&n.children.some(i=>i.children.filter(c=>c.type
 // nested quotes. Simple containers retain their established projection/planners.
 // Every row owns one exact lexical paragraph and its full PM path; no serializer.
 export function projectComplexContainer(node,source,position,blockIndex){
- const lineStart=at=>Math.max(source.lastIndexOf('\n',at-1),source.lastIndexOf('\r',at-1))+1,tails=new Map();let looseChild=false;
+ if(node.type!=='list'&&node.type!=='blockquote')return null;
+ const lineStart=at=>physicalLineStart(source,at),tails=new Map();let looseChild=false;
  function pendingList(n,depth=0){
   if(n.type!=='list'||depth>=6)return;
   for(const item of n.children){

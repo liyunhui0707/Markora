@@ -3,6 +3,7 @@ import {filePresentation} from './document-file-presentation.mjs';
 // Presentation only: session authority, edits, composition and writes stay in their controllers.
 export function createWritingShell({ byId, context, refreshDrafts = () => {}, reading = null, sourceView = null }) {
   let enabled = false, previousSession = null;
+  const characterCounts = new WeakMap();
   const metadata = new Map(), rows = new Map();
   const blocked = () => {
     const { loading, state: s } = context();
@@ -87,7 +88,8 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
   function syncNavigation() {
     if (!enabled) return;
     const c = context(), confirmed = c.state?.confirmed, select = byId('documents');
-    if (confirmed) metadata.set(confirmed.sessionId, { temporary: confirmed.temporary, readOnly: confirmed.readOnly, detail:filePresentation(confirmed).kind });
+    if (confirmed) metadata.set(confirmed.sessionId, { temporary: confirmed.temporary, readOnly: confirmed.readOnly,
+      detail:confirmed.linkedFile?(confirmed.originalSave?.localProvider==='onedrive'?'OneDrive 文件':'文件'):filePresentation(confirmed).kind });
     const options = [...select.options], ids = new Set(options.map(o => o.value));
     for (const [id, row] of rows) if (!ids.has(id)) { row.button.remove(); rows.delete(id); metadata.delete(id); }
     const list = byId('session-list'), doc = list.ownerDocument;
@@ -125,7 +127,13 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
     byId('empty-new').disabled = !!blocked() || byId('new-temporary').disabled;
     for (const id of ['toggle-session-sidebar', 'close-session-sidebar', 'session-filter', 'sidebar-scrim']) byId(id).disabled = !!(context().loading||s?.historyPending||s?.compositionInvalid||s?.composing);
     byId('reading-mode').hidden = !current?.readOnly;
-    byId('document-statistics').textContent = current ? current.source.replace(/\s/gu, '').length.toLocaleString() + ' 字符 · Markdown' : 'Markdown';
+    // A confirmed snapshot can be presented many times while later keys are in flight.
+    let count = characterCounts.get(current);
+    if (current && count === undefined) {
+      count = current.source.replace(/\s/gu, '').length.toLocaleString();
+      characterCounts.set(current, count);
+    }
+    byId('document-statistics').textContent = current ? count + ' 字符 · Markdown' : 'Markdown';
     if (current?.sessionId !== previousSession) {
       byId('document-scroll').scrollTop = 0;
       byId('session-filter').value = '';
@@ -136,7 +144,7 @@ export function createWritingShell({ byId, context, refreshDrafts = () => {}, re
     byId('details-document-kind').textContent = file.kind;
     byId('details-document-location').textContent = file.location;
     byId('details-document-revision').textContent = String(current?.revision ?? '—');
-    byId('details-document-count').textContent = current ? current.source.replace(/\s/gu, '').length.toLocaleString() : '—';
+    byId('details-document-count').textContent = count ?? '—';
     byId('details-backup-card').hidden = !current?.temporary;
     syncNavigation(); reading?.sync(); sourceView?.sync();
     if (!byId('test-copy-confirmation').hidden) {

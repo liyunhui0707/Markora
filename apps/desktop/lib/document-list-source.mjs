@@ -1,4 +1,4 @@
-import {projectPrefixedParagraph} from './document-prefixed-paragraph.mjs';
+import {physicalLineStart,projectPrefixedParagraph} from './document-prefixed-paragraph.mjs';
 import {projectInlineParts} from './document-inline-tree.mjs';
 import { inlineTextNode } from './document-inline-leaf.mjs';
 export const listNodeAt = (node, path) => path.reduce((n,i)=>n.content[i],node);
@@ -14,7 +14,7 @@ export function projectSimpleList(node, source, position, blockIndex) {
     for(const [siblingIndex,item] of list.children.entries()) {
       if(items.length>=32)return null;
       const a=item.position.start.offset,b=item.position.end.offset;
-      const lineFrom=Math.max(source.lastIndexOf('\n',a-1),source.lastIndexOf('\r',a-1))+1;
+      const lineFrom=physicalLineStart(source,a);
       const indent=source.slice(lineFrom,a);if(!/^ *$/.test(indent))return null;
       const lineEnd=a+(source.slice(a,b).search(/[\r\n]/)<0?b-a:source.slice(a,b).search(/[\r\n]/));
       const raw=source.slice(a,lineEnd),marker=raw.match(list.ordered?/^(\d{1,9}[.)] )/:/^([-+*] )/)?.[0];

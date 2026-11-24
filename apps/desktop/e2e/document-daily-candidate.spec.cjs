@@ -3,6 +3,7 @@ const {test,expect,_electron}=require('@playwright/test');
 const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os');
 const {createSaveFolderFixture}=require('../test/helpers/save-folder-fixture.cjs');
 const {createResourceProbe}=require('./helpers/document-resource-probe.cjs');
+const {stopOwnedElectron}=require('./helpers/document-owned-stop.cjs');
 test('daily candidate workflow: long mixed article, Space boundaries, input, source, native save, conflict and recovery',async({},info)=>{
  test.setTimeout(240000);const root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'document-safe-create-daily-candidate-')));await fs.mkdir(info.outputDir,{recursive:true});const fixture=createSaveFolderFixture(info.outputDir),file=path.join(fixture.dir,'Daily article.md'),target=path.join(fixture.dir,'Retained local.md');
  const prose='Common article 中文😀 **bold *both* tail** [link](../guide.md "keep") and `code`. '.repeat(6);
@@ -16,7 +17,12 @@ test('daily candidate workflow: long mixed article, Space boundaries, input, sou
   page.on('pageerror',e=>faults.push(e.message));page.on('request',r=>{if(/^https?:/.test(r.url()))network.push(r.url());});
   await app.evaluate(({dialog,BrowserWindow},{file,target,hidden})=>{dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});dialog.showSaveDialog=async()=>({canceled:false,filePath:target});dialog.showMessageBox=async()=>({response:1});dialog.showMessageBoxSync=()=>1;const w=BrowserWindow.getAllWindows()[0];w.setContentSize(1280,850);if(hidden)w.hide();else w.showInactive();},{file,target,hidden:process.env.DOCUMENT_DAILY_CANDIDATE_HIDDEN==='1'});await expect(page.locator('#empty-open')).toBeEnabled();await focusNativeWindow(app,page,process.env.DOCUMENT_DAILY_CANDIDATE_HIDDEN==='1');return cdp;
  }
- async function stop(){if(app){await app.close();app=null;const e=await exit;exits.push(e);expect(e).toEqual({code:0,signal:null});}}
+ async function stop(requireNormal=true){
+  if(!app)return;
+  const result=await stopOwnedElectron({app,exit});
+  app=null;exits.push(result);
+  if(requireNormal)expect(result).toEqual({code:0,signal:null,forced:false});
+ }
  async function caret(node){await node.click();await page.locator('#editor .tiptap').focus();await settleNativeCaret(node);const at=await node.evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r);return n.closest('.tiptap').editor.view.posAtDOM(s.anchorNode,s.anchorOffset);});await expect.poll(()=>node.evaluate(n=>{const v=n.closest('.tiptap').editor.view;return v.hasFocus()&&v.state.selection.empty&&v.state.selection.from;})).toBe(at);}
  try{
   const cdp=await launch();await page.locator('#empty-open').click();const opened=await snapshot();expect(opened.originalSave.filePath).toBe(file);
@@ -37,5 +43,12 @@ test('daily candidate workflow: long mixed article, Space boundaries, input, sou
   const label=(await snapshot()).label,draft=(await page.evaluate(()=>window.documentDemo.listDrafts())).drafts.find(d=>d.label===label);expect(draft).toBeTruthy();await stop();await launch();await page.locator('#show-drafts').click();await page.locator(`[data-draft-id="${draft.id}"]`).getByRole('button',{name:'恢复副本'}).click();await check();expect((await snapshot()).originalSave).toBeNull();expect((await snapshot()).canUndo).toBe(false);await caret(page.locator('#editor .tiptap > p').first());await page.keyboard.insertText(' 恢复后继续');expected=expected.replace('Opening paragraph.'+(' abcdefghijklmnop').repeat(4)+' 本地保留','Opening paragraph.'+(' abcdefghijklmnop').repeat(4)+' 本地保留 恢复后继续');await check();await backup();
   await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].showInactive());await page.screenshot({path:info.outputPath('daily-candidate.png')});expect(faults).toEqual([]);expect(network).toEqual([]);await fs.writeFile(info.outputPath('resource.json'),JSON.stringify(resource,null,2));passed=true;
  }catch(error){if(page){const status=await page.locator('#status').textContent(),warning=await page.locator('#viewer-status').textContent(),actual=await snapshot();let firstDifference=0;while(firstDifference<Math.min(expected.length,actual?.source?.length||0)&&expected[firstDifference]===actual.source[firstDifference])firstDifference++;console.error('daily-failure-observation:'+JSON.stringify({status:JSON.parse(status),warning,idleObservations,expectedUnits:expected.length,actualUnits:actual?.source?.length,firstDifference,context:actual?.source?.slice(Math.max(0,firstDifference-30),firstDifference+70)}));await fs.writeFile(info.outputPath('failure.json'),JSON.stringify({expected,actual,status,warning,idleObservations},null,2));}throw error;}
- finally{await stop();const archive=fixture.archive({quiescent:!app});await fs.writeFile(info.outputPath('evidence.json'),JSON.stringify({passed,root,sourceUnits:source.length,samples,exits,archive,faults,network,inputDriver:'CDP; not physical IME',voiceOver:'AX semantics only; not spoken feedback',hiddenFunctionalWindow:process.env.DOCUMENT_DAILY_CANDIDATE_HIDDEN==='1'},null,2));}
+ finally{
+  try{await stop(passed);}
+  catch(error){passed=false;throw error;}
+  finally{
+   const archive=app?null:fixture.archive({quiescent:true});
+   await fs.writeFile(info.outputPath('evidence.json'),JSON.stringify({passed,root,sourceUnits:source.length,samples,exits,archive,faults,network,inputDriver:'CDP; not physical IME',voiceOver:'AX semantics only; not spoken feedback',hiddenFunctionalWindow:process.env.DOCUMENT_DAILY_CANDIDATE_HIDDEN==='1'},null,2));
+  }
+ }
 });
