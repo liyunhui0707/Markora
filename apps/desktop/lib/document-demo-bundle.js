@@ -4156,51 +4156,6 @@
     output.handlers.inlineMath = safeInlineMath;
   }
 
-  // lib/document-extension-preview.mjs
-  var noteTypes = /* @__PURE__ */ new Set(["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]);
-  function metadataPreview(raw) {
-    const lines = raw.split(/\r\n|\r|\n/).slice(1, -1);
-    return { tag: "section", children: [{ tag: "strong", children: ["\u6587\u6863\u5C5E\u6027"] }, { tag: "pre", children: [lines.join("\n")] }] };
-  }
-  function extensionKind(node2, source) {
-    if (node2.type === "math") return "math";
-    if (node2.type === "code" && node2.lang?.toLowerCase() === "mermaid") return "mermaid";
-    if (node2.type === "footnoteDefinition") return "footnote";
-    if (node2.type === "blockquote" && /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\r?\n|\r|$)/.test(source)) return "alert";
-    if (!source.includes("$") && !source.includes("[^") && !source.includes("[[") && !source.includes("mermaid")) return null;
-    const has = (n) => n.type === "inlineMath" || n.type === "math" || n.type === "footnoteReference" || n.type === "footnoteDefinition" || n.type === "code" && n.lang?.toLowerCase() === "mermaid" || n.type === "text" && /\[\[[^\[\]\r\n]+\]\]/.test(n.value) || n.children?.some(has);
-    return has(node2) ? node2.type : null;
-  }
-  function extensionTree(n, convert2, depth2, source) {
-    if (n.type === "math" || n.type === "inlineMath") return { tag: n.type === "math" ? "div" : "span", formula: n.value, display: n.type === "math", children: [n.value] };
-    if (n.type === "code" && n.lang?.toLowerCase() === "mermaid") return { tag: "div", diagram: n.value, children: [n.value] };
-    if (n.type === "footnoteReference") return { tag: "button", jump: "note", target: n.identifier, children: ["[" + n.label + "]"] };
-    if (n.type === "footnoteDefinition") {
-      const children = n.children.map((c) => convert2(c, depth2 + 1));
-      if (children.includes(null)) return null;
-      return { tag: "section", note: n.identifier, children: [{ tag: "button", jump: "back", target: n.identifier, children: ["\u21A9 " + n.label] }, ...children] };
-    }
-    if (n.type === "blockquote") {
-      const first2 = n.children[0]?.children?.[0], m = first2?.type === "text" && first2.value.match(/^\[!([A-Z]+)\](?:\r\n|\r|\n|$)/);
-      if (m && noteTypes.has(m[1])) {
-        const clone = { ...n.children[0], children: [{ ...first2, value: first2.value.slice(m[0].length) }, ...n.children[0].children.slice(1)] };
-        const children = [clone, ...n.children.slice(1)].map((c) => convert2(c, depth2 + 1));
-        if (children.includes(null)) return null;
-        return { tag: "blockquote", children: [{ tag: "strong", children: [m[1]] }, ...children] };
-      }
-    }
-    if (n.type === "text" && n.value.includes("[[") && source.slice(n.position.start.offset, n.position.end.offset) === n.value) {
-      const children = [];
-      let index2 = 0;
-      for (const match of n.value.matchAll(/(?<![!\[])\[\[([^\[\]|\r\n]+)(?:\|([^\[\]\r\n]+))?\]\](?!\])/g)) {
-        children.push(n.value.slice(index2, match.index), { tag: "button", jump: "wiki", target: match[1], children: [match[2] || match[1]] });
-        index2 = match.index + match[0].length;
-      }
-      if (index2) return { tag: "span", children: [...children, n.value.slice(index2)] };
-    }
-    return void 0;
-  }
-
   // node_modules/decode-named-character-reference/index.dom.js
   var element = document.createElement("i");
   function decodeNamedCharacterReference(value) {
@@ -4247,6 +4202,83 @@
       return decodeNumericCharacterReference($2.slice(hex ? 2 : 1), hex ? 16 : 10);
     }
     return decodeNamedCharacterReference($2) || $0;
+  }
+
+  // lib/document-extension-preview.mjs
+  var noteTypes = /* @__PURE__ */ new Set(["NOTE", "TIP", "IMPORTANT", "WARNING", "CAUTION"]);
+  function decodedOffsets(raw, value, start, softSpaces = true) {
+    if (raw === value) return { start };
+    let text5 = "", offsets = [start];
+    for (const m of raw.matchAll(/\\[!-/:-@\[-`{-~]|&(?:#[0-9]{1,7}|#x[\da-fA-F]{1,6}|[a-zA-Z][a-zA-Z0-9]*);|\r\n|[\s\S]/gu)) {
+      const decoded = decodeString(m[0]);
+      const token = softSpaces ? decoded.replace(/\r\n?|\n/g, " ") : decoded;
+      for (let i = 1; i <= token.length; i++) offsets.push(i === token.length ? start + m.index + m[0].length : null);
+      text5 += token;
+    }
+    return text5 === value ? { start, offsets } : null;
+  }
+  function wikiParts(node2, source) {
+    const start = node2.position.start.offset, raw = source.slice(start, node2.position.end.offset);
+    if (!raw.includes("[[")) return null;
+    const map4 = decodedOffsets(raw, node2.value, start, false);
+    if (!map4) return null;
+    const boundary = (i) => map4.offsets ? map4.offsets[i] : start + i;
+    const parts = [];
+    let cursor = 0;
+    for (const match of node2.value.matchAll(/(?<![!\[])\[\[([^\[\]|\r\n]+)(?:\|([^\[\]\r\n]+))?\]\](?!\])/g)) {
+      const first2 = match.index, last = first2 + match[0].length, a = boundary(first2), b = boundary(last);
+      if (a == null || b == null || source.slice(a, b) !== match[0]) continue;
+      parts.push(
+        { text: node2.value.slice(cursor, first2), start: boundary(cursor), end: a },
+        { tree: { tag: "button", jump: "wiki", target: match[1], children: [match[2] || match[1]] } }
+      );
+      cursor = last;
+    }
+    if (!parts.length) return null;
+    parts.push({ text: node2.value.slice(cursor), start: boundary(cursor), end: start + raw.length });
+    return parts;
+  }
+  function alertMarker(node2) {
+    const first2 = node2.children[0]?.children?.[0];
+    const match = first2?.type === "text" && first2.value.match(/^\[!([A-Z]+)\](?:\r\n|\r|\n|$)/);
+    return match && noteTypes.has(match[1]) ? match : null;
+  }
+  function metadataPreview(raw) {
+    const lines = raw.split(/\r\n|\r|\n/).slice(1, -1);
+    return { tag: "section", children: [{ tag: "strong", children: ["\u6587\u6863\u5C5E\u6027"] }, { tag: "pre", children: [lines.join("\n")] }] };
+  }
+  function extensionKind(node2, source) {
+    if (node2.type === "math") return "math";
+    if (node2.type === "code" && node2.lang?.toLowerCase() === "mermaid") return "mermaid";
+    if (node2.type === "footnoteDefinition") return "footnote";
+    if (node2.type === "blockquote" && /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\r?\n|\r|$)/.test(source)) return "alert";
+    if (!source.includes("$") && !source.includes("[^") && !source.includes("[[") && !source.includes("mermaid")) return null;
+    const has = (n) => n.type === "inlineMath" || n.type === "math" || n.type === "footnoteReference" || n.type === "footnoteDefinition" || n.type === "code" && n.lang?.toLowerCase() === "mermaid" || n.type === "text" && /\[\[[^\[\]\r\n]+\]\]/.test(n.value) || n.children?.some(has);
+    return has(node2) ? node2.type : null;
+  }
+  function extensionTree(n, convert2, depth2, source) {
+    if (n.type === "math" || n.type === "inlineMath") return { tag: n.type === "math" ? "div" : "span", formula: n.value, display: n.type === "math", children: [n.value] };
+    if (n.type === "code" && n.lang?.toLowerCase() === "mermaid") return { tag: "div", diagram: n.value, children: [n.value] };
+    if (n.type === "footnoteReference") return { tag: "button", jump: "note", target: n.identifier, children: ["[" + n.label + "]"] };
+    if (n.type === "footnoteDefinition") {
+      const children = n.children.map((c) => convert2(c, depth2 + 1));
+      if (children.includes(null)) return null;
+      return { tag: "section", note: n.identifier, children: [{ tag: "button", jump: "back", target: n.identifier, children: ["\u21A9 " + n.label] }, ...children] };
+    }
+    if (n.type === "blockquote") {
+      const first2 = n.children[0]?.children?.[0], m = alertMarker(n);
+      if (m) {
+        const clone = { ...n.children[0], children: [{ ...first2, value: first2.value.slice(m[0].length) }, ...n.children[0].children.slice(1)] };
+        const children = [clone, ...n.children.slice(1)].map((c) => convert2(c, depth2 + 1));
+        if (children.includes(null)) return null;
+        return { tag: "blockquote", children: [{ tag: "strong", children: [m[1]] }, ...children] };
+      }
+    }
+    if (n.type === "text" && n.value.includes("[[")) {
+      const parts = wikiParts(n, source);
+      if (parts) return { tag: "span", children: parts.map((part) => part.tree ?? part.text) };
+    }
+    return void 0;
   }
 
   // lib/document-edit-projection.mjs
@@ -14532,16 +14564,6 @@
 
   // lib/document-extended-source.mjs
   var reject2 = () => ({ ok: false, code: "unsafe-source-range" });
-  function decodedOffsets(raw, value, start) {
-    if (raw === value) return { start };
-    let text5 = "", offsets = [start];
-    for (const m of raw.matchAll(/\\[!-/:-@\[-`{-~]|&(?:#[0-9]{1,7}|#x[\da-fA-F]{1,6}|[a-zA-Z][a-zA-Z0-9]*);|\r\n|[\s\S]/gu)) {
-      const token = decodeString(m[0]).replace(/\r\n?|\n/g, " ");
-      for (let i = 1; i <= token.length; i++) offsets.push(i === token.length ? start + m.index + m[0].length : null);
-      text5 += token;
-    }
-    return text5 === value ? { start, offsets } : null;
-  }
   function projectExtended(node2, source, position2, definitions) {
     const start = node2.position.start.offset, end = node2.position.end.offset;
     if (end - start > 32768 || /^:::/.test(source.slice(start, start + 3))) return null;
@@ -14565,19 +14587,19 @@
         return [atom(n.type, extensionTree(n, null, 0, source))];
       if (n.type === "html") return [atom("html", { tag: "code", children: [raw] })];
       if (n.type === "text" && raw.includes("[[")) {
-        const wiki = extensionTree(n, null, 0, source);
+        const wiki = wikiParts(n, source);
         if (wiki) {
           const result = [];
-          let cursor = a;
-          for (const part of wiki.children) {
-            if (typeof part === "string") {
-              result.push(...text5(part, { start: cursor }, marks2, [...path2.slice(0, -1), path2.at(-1) + result.length]));
-              cursor += part.length;
-            } else {
-              const close2 = source.indexOf("]]", cursor + 2);
-              if (close2 < cursor || close2 + 2 > b) return null;
-              result.push(atom("wiki", part));
-              cursor = close2 + 2;
+          for (const part of wiki) {
+            if (part.tree) result.push(atom("wiki", part.tree));
+            else {
+              const value = part.text.replace(/\r\n?|\n/g, " ");
+              result.push(...text5(
+                value,
+                decodedOffsets(source.slice(part.start, part.end), value, part.start),
+                marks2,
+                [...path2.slice(0, -1), path2.at(-1) + result.length]
+              ));
             }
           }
           return result;
@@ -14624,6 +14646,7 @@
     function block(n, path2, depth2 = 0) {
       if (depth2 > 12 || n.type === "blockquote" && depth2 >= 6 || n.type === "list" && depth2 >= 12) return null;
       if (n.type === "code" && depth2 > 0) return null;
+      if (n.type === "blockquote" && alertMarker(n)) return null;
       if (["listItem", "blockquote"].includes(n.type) && ++rowCount > 32) return null;
       const type = { paragraph: "paragraph", heading: "heading", blockquote: "blockquote", list: n.ordered ? "orderedList" : "bulletList", listItem: "listItem", code: "codeBlock", table: "table", tableRow: "tableRow" }[n.type];
       if (!type) return null;
@@ -14676,6 +14699,18 @@
               const run3 = inline5(child, [], [...path2, i, j, 0, parts.length]);
               if (!run3) return null;
               parts.push(...run3);
+            }
+            if (!cell2.children.length) {
+              const start2 = cell2.position.start.offset;
+              const raw = source.slice(start2, cell2.position.end.offset);
+              const padding = raw.match(/^(\|?)([ \t]*)\|?$/);
+              if (padding) leaves.push({
+                from: pos,
+                to: pos,
+                start: start2 + padding[1].length + Math.min(1, padding[2].length),
+                path: [...path2, i, j, 0, 0],
+                emptyCell: true
+              });
             }
             pos += 2;
             cells.push({ type: i ? "tableCell" : "tableHeader", attrs: { align: n.align[j] }, content: [{ type: "paragraph", content: parts }] });
@@ -14749,9 +14784,11 @@
       const expected = copyEditedBlock(projection.doc, block.index);
       let parent = expected.content[block.index];
       for (const step of leaf.path.slice(0, -1)) parent = parent.content[step];
-      const i = leaf.path.at(-1), text5 = parent.content[i].text;
+      const i = leaf.path.at(-1), text5 = leaf.emptyCell ? "" : parent.content[i].text;
       const value = text5.slice(0, from2 - leaf.from) + insert2 + text5.slice(to - leaf.from);
-      if (value) parent.content[i].text = value;
+      if (leaf.emptyCell) {
+        if (value) parent.content.push({ type: "text", text: value });
+      } else if (value) parent.content[i].text = value;
       else parent.content.splice(i, 1);
       let rawInsert = insert2;
       if (type === "table") rawInsert = insert2.replaceAll("|", "\\|");
@@ -16132,7 +16169,7 @@
         continue;
       }
       const kind = extensionKind(node2, source.slice(start, end));
-      if (kind && ["paragraph", "heading"].includes(node2.type)) {
+      if (kind && kind !== "alert" && ["paragraph", "heading", "table", "list", "blockquote"].includes(node2.type)) {
         const extra = projectExtended(node2, source, position2, definitions);
         if (extra) {
           const { doc: doc4, size, ...mapping } = extra;
@@ -27099,44 +27136,57 @@
     let total = 0;
     if (!query || query.length > FIND_QUERY_LIMIT) return { matches: matches2, total };
     const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), matchCase ? "gu" : "giu");
-    function scan(text5, start, previewOffset = null) {
-      pattern.lastIndex = 0;
-      for (const hit of text5.matchAll(pattern)) {
+    function scan(parts) {
+      if (!parts.length) return;
+      const text5 = parts.map((part) => part.text).join("");
+      let index2 = 0, start = 0;
+      for (const match of text5.matchAll(pattern)) {
         total++;
-        if (matches2.length < FIND_LIMIT) matches2.push(previewOffset !== null ? {
-          from: start,
-          to: start + 1,
-          preview: true,
-          offset: previewOffset + hit.index,
-          text: hit[0]
-        } : { from: start + hit.index, to: start + hit.index + hit[0].length });
-      }
-    }
-    function scanPreview(node2, pos) {
-      let offset = 0;
-      for (const run3 of previewTextRuns(previewTree(node2, pos))) {
-        scan(run3, pos, offset);
-        offset += run3.length;
+        if (matches2.length >= FIND_LIMIT) continue;
+        while (start + parts[index2].text.length <= match.index) start += parts[index2++].text.length;
+        const end = match.index + match[0].length, pieces = [];
+        for (let i = index2, at = start; at < end; i++) {
+          const part = parts[i], lo = Math.max(0, match.index - at), hi = Math.min(part.text.length, end - at);
+          if (part.offset !== void 0) {
+            pieces.push({ from: part.pos, to: part.pos + 1, preview: true, offset: part.offset + lo, text: part.text.slice(lo, hi) });
+          } else pieces.push({ from: part.pos + lo, to: part.pos + hi });
+          at += part.text.length;
+        }
+        const from2 = pieces[0].from, to = pieces.at(-1).to;
+        if (pieces.length === 1) matches2.push(pieces[0]);
+        else if (pieces.some((piece) => piece.preview)) matches2.push({ from: from2, to, preview: true, pieces });
+        else matches2.push({ from: from2, to });
       }
     }
     doc4.descendants((node2, pos) => {
+      const parts = [];
+      function flush() {
+        scan(parts);
+        parts.length = 0;
+      }
+      function addPreview(child, position2) {
+        const runs = previewTextRuns(previewTree(child, position2));
+        let offset = 0;
+        for (const [i, text5] of runs.entries()) {
+          if (i) flush();
+          parts.push({ text: text5, pos: position2, offset });
+          offset += text5.length;
+        }
+        if (!runs.length) flush();
+      }
       if (node2.type.name === "documentPreview") {
-        scanPreview(node2, pos);
+        addPreview(node2, pos);
+        flush();
         return false;
       }
       if (!node2.isTextblock) return;
-      let text5 = "", start = pos + 1;
       node2.forEach((child, offset) => {
-        if (child.isText) {
-          if (!text5) start = pos + 1 + offset;
-          text5 += child.text;
-        } else {
-          scan(text5, start);
-          text5 = "";
-          if (child.type.name === "inlineDocumentPreview") scanPreview(child, pos + 1 + offset);
-        }
+        const position2 = pos + 1 + offset;
+        if (child.isText) parts.push({ text: child.text, pos: position2 });
+        else if (child.type.name === "inlineDocumentPreview") addPreview(child, position2);
+        else flush();
       });
-      scan(text5, start);
+      flush();
       return false;
     });
     return { matches: matches2, total };
@@ -27190,6 +27240,24 @@
     range.setEnd(...end);
     return range.toString() === hit.text ? range : null;
   }
+  function highlightRanges(view, hit) {
+    if (!hit?.preview) return [];
+    const ranges = [];
+    for (const piece of hit.pieces ?? [hit]) {
+      if (piece.preview) {
+        const range = previewRange(view, piece);
+        if (!range) return [];
+        ranges.push(range);
+      } else {
+        const a = view.domAtPos(piece.from, 1), b = view.domAtPos(piece.to, -1);
+        const range = view.dom.ownerDocument.createRange();
+        range.setStart(a.node, a.offset);
+        range.setEnd(b.node, b.offset);
+        ranges.push(range);
+      }
+    }
+    return ranges;
+  }
   function createFindPlugin() {
     return new Plugin({ key, state: {
       init: () => DecorationSet.empty,
@@ -27216,16 +27284,20 @@
     function publish() {
       const { editor: editor2 } = context();
       clearHighlight();
-      const current = matches2[active], needsBlock = current?.preview && (!registry || !previewRange(editor2.view, current));
+      const current = matches2[active], needsBlock = current?.preview && (!registry || !highlightRanges(editor2.view, current).length);
       const decorations2 = matches2.flatMap((m, i) => m.preview ? [] : [Decoration.inline(
         m.from,
         m.to,
         { class: "document-find-hit" + (i === active ? " is-current" : ""), "data-find-index": String(i) }
       )]);
-      if (needsBlock) decorations2.push(Decoration.node(current.from, current.to, { class: "document-find-hit is-current" }));
+      if (needsBlock) for (const piece of current.pieces ?? [current]) {
+        const attrs = { class: "document-find-hit is-current" };
+        decorations2.push(piece.preview ? Decoration.node(piece.from, piece.to, attrs) : Decoration.inline(piece.from, piece.to, attrs));
+      }
       editor2.view.dispatch(editor2.state.tr.setMeta(key, DecorationSet.create(editor2.state.doc, decorations2)).setMeta("addToHistory", false));
-      activeRange = previewRange(editor2.view, matches2[active]);
-      if (activeRange && registry) registry.set(previewHighlight, new doc4.defaultView.Highlight(activeRange));
+      const ranges = highlightRanges(editor2.view, current);
+      activeRange = ranges[0] ?? null;
+      if (activeRange && registry) registry.set(previewHighlight, new doc4.defaultView.Highlight(...ranges));
     }
     byId2("editor").addEventListener("markora-preview-rendered", () => {
       if (opened) {

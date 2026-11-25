@@ -13,7 +13,7 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
   const root=await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(),'document-safe-create-typed-')));
   const source=['航行说明','========','','费用 &amp; 说明','','| 名称 | 数量 |','| :--- | ---: |',
     '| 缺格 |','| 复核点复核点 | 42 | 仅源码可见 |','','| A | B |','| --- | --- |','| 1 | 2 |',
-    '','> 引用','','> - 甲乙','> - 尾','','写作位置：'].join('\r\n');
+    '','| 项目 | 数额 |','| :--- | ---: |','| 普通 | $x$ |','','总量x。','','总量$x$。','','A &amp; B 到 [[#航行说明|结论]]。','','> 引用','','> - 甲乙','> - 尾','','写作位置：'].join('\r\n');
   const bytes=text=>Buffer.from('\ufeff'+text,'utf8');
   await fs.writeFile(file,bytes(source),{flag:'wx',mode:0o600});
   let app,exit;
@@ -47,12 +47,26 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
       await page.locator('#find-query').fill('复核点');
       const offset=()=>page.evaluate(()=>[...CSS.highlights.get('markora-current-preview')][0].startOffset);
       await expect.poll(offset).toBe(0);await page.locator('#find-next').click();await expect.poll(offset).toBe(3);
+      await page.locator('#find-query').fill('总量x。');
+      await expect(page.locator('#find-count')).toHaveText('1 / 2');
+      await page.locator('#find-next').click();
+      const highlight=()=>page.evaluate(()=>Array.from(CSS.highlights.get('markora-current-preview')??[],r=>r.toString()).join(''));
+      await expect.poll(highlight).toBe('总量x。');
+      if(writing){
+        await page.locator('#find-replacement').fill('替换');
+        await page.locator('#find-replace-all').click();
+        await expect(page.locator('#find-replace-status')).toContainText('只读预览');
+        expect((await snapshot()).source).toBe(source);
+      }
       await page.locator('#find-close').click();
+      const wiki=editor.locator('[data-preview-jump="wiki"]');
+      await expect(wiki).toHaveText('结论');await wiki.click();
+      await expect(editor.getByRole('heading',{name:'航行说明'})).toBeFocused();
       if(writing){
         const place=async(locator,offset)=>locator.evaluate((element,offset)=>{
           const view=element.closest('.tiptap').editor.view;
           const pos=view.posAtDOM(element.firstChild,offset);view.focus();
-          view.dispatch(view.state.tr.setSelection(view.state.selection.constructor.create(view.state.doc,pos)));
+          element.closest('.tiptap').editor.commands.setTextSelection(pos);
         },offset);
         const lastRow=editor.locator(':scope > p').last();
         await place(lastRow,'写作位置：'.length);
@@ -123,6 +137,21 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
           await page.keyboard.type(' ');expected+=' ';
           await expect.poll(async()=>(await snapshot())?.source).toBe(expected);
         }
+        const mixedCell=editor.locator('table').nth(2).locator('td p').first();
+        await place(mixedCell,2);await page.keyboard.insertText('甲');
+        const typed=expected.replace('| 普通 |','| 普通甲 |');
+        await expect.poll(async()=>(await snapshot()).source).toBe(typed);
+        await mixedCell.evaluate(element=>{
+          const view=element.closest('.tiptap').editor.view;
+          const from=view.posAtDOM(element.firstChild,0),to=from+3;
+          view.dispatch(view.state.tr.setSelection(view.state.selection.constructor.create(view.state.doc,from,to)));
+          const data=new DataTransfer();data.setData('text/plain','中e\u0301👩‍💻');
+          element.dispatchEvent(new ClipboardEvent('paste',{clipboardData:data,bubbles:true,cancelable:true}));
+        });
+        expected=expected.replace('| 普通 |','| 中e\u0301👩‍💻 |');
+        await expect.poll(async()=>(await snapshot()).source).toBe(expected);
+        await page.keyboard.press('Meta+z');await expect.poll(async()=>(await snapshot()).source).toBe(typed);
+        await page.keyboard.press('Meta+Shift+z');await expect.poll(async()=>(await snapshot()).source).toBe(expected);
         await page.keyboard.press('Meta+s');
         await expect.poll(async()=>(await snapshot())?.dirty).toBe(false);
         expect(await fs.readFile(file)).toEqual(bytes(expected));

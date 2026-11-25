@@ -50,3 +50,49 @@ test('semantic previews retain neighboring exact edits and never execute HTML or
  assert.doesNotMatch(spec,/"(?:href|src|onclick)":/);
  assert.doesNotMatch(spec,/\["(?:script|img|iframe)"/);
 });
+
+test('find joins visible inline math with adjacent prose without granting replacement authority',async()=>{
+ const {findDocumentText}=await import('../lib/document-find-view.mjs');
+ const doc=schema.nodeFromJSON(projectSource('总量x。\n\n总量$x$。\n\n总量\n\nx。').doc);
+ const hits=findDocumentText(doc,'总量x。').matches;
+ assert.equal(hits.length,2);
+ assert(!hits[0].preview);
+ assert.equal(hits[1].preview,true);
+});
+
+test('wiki spelling survives neighboring entities while escaped or encoded brackets stay literal',()=>{
+ const source=String.raw`甲 &amp; \* 到 [[#小结|结论]] 后 &amp; 尾。\[[#小结]] &#91;&#91;#小结]]`;
+ const projection=projectSource(source);
+ const atoms=projection.doc.content[0].content.filter(n=>n.type==='inlineDocumentPreview');
+ assert.equal(atoms.length,1);
+ assert.equal(atoms[0].attrs.tree.target,'#小结');
+ const leaf=projection.extended[0].leaves.at(-1);
+ const edit=mapTextEdit(source,{from:leaf.from+5,to:leaf.from+6,insert:'改'});
+ assert.equal(edit.source,source.replace('尾','改'));
+});
+
+test('editable leaves inside mixed tables, lists and quotes preserve neighboring previews and exact source',async()=>{
+ const {findDocumentText}=await import('../lib/document-find-view.mjs');
+ for(const source of [
+   '| 项目 | 数额 |\r\n| :--- | ---: |\r\n| 普通 | $x$ |',
+   '> 普通 与 $x$', '- 普通 与 [[#小结|结论]]',
+   '> - 普通 与 [^a]\r\n\r\n[^a]: 注释'
+ ]){
+   const doc=schema.nodeFromJSON(projectSource(source).doc);doc.check();
+   const hit=findDocumentText(doc,'普通').matches[0];
+   assert.ok(hit&&!hit.preview,source);
+   const edit=mapTextEdit(source,{from:hit.from,to:hit.to,insert:'中文e\u0301👩‍💻'});
+   assert.equal(edit.source,source.replace('普通','中文e\u0301👩‍💻'));
+   const inverse=edit.inverseSource;
+   assert.equal(edit.source.slice(0,inverse.from)+inverse.insert+edit.source.slice(inverse.to),source);
+ }
+});
+
+test('a cleared ordinary cell next to a formula can receive fresh input',async()=>{
+ const {findDocumentText}=await import('../lib/document-find-view.mjs');
+ const source='| 名称 | 值 |\n|---|---|\n| 旧 | $x$ |';
+ const hit=findDocumentText(schema.nodeFromJSON(projectSource(source).doc),'旧').matches[0];
+ const cleared=mapTextEdit(source,{...hit,insert:''});
+ assert.equal(cleared.source,source.replace('旧',''));
+ assert.equal(mapTextEdit(cleared.source,{...cleared.selection,insert:'新'}).source,source.replace('旧','新'));
+});

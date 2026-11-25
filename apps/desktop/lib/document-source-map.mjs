@@ -118,7 +118,7 @@ export function projectSource(source, spliceHint) {
     let start = node.position.start.offset, end = node.position.end.offset;
     if (start < fm) { if (end > fm) { opaque(source.slice(fm, end),fm); previousEnd = end; } continue; }
     const kind=extensionKind(node,source.slice(start,end));
-    if(kind&&['paragraph','heading'].includes(node.type)){
+    if(kind&&kind!=='alert'&&['paragraph','heading','table','list','blockquote'].includes(node.type)){
       const extra=projectExtended(node,source,position,definitions);
       if(extra){
         const {doc,size,...mapping}=extra;

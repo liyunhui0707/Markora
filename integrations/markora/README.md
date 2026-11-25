@@ -1,7 +1,7 @@
 # Markora CLI 与 MCP 伴侣
 
 让 AI 或命令行生成 Markdown 后，立即交给已安装的 Markora。伴侣工具为 0.2.1，
-配合 Markora 0.86.0；它独立于 App 安装包，不改变应用身份、草稿、保存权限或已发布 ZIP。
+配合 Markora 0.87.0；它独立于 App 安装包，不改变应用身份、草稿、保存权限或已发布 ZIP。
 
 ## 命令
 
