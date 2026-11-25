@@ -306,6 +306,13 @@ function install(snapshot) {
           event.preventDefault();followPreviewJump(button,view.dom,viewerStatus);return true;
         },
         keydown: (view, event) => {
+          const jump=event.target.closest?.('button[data-preview-jump]');
+          if(jump&&['Enter',' '].includes(event.key)&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey
+              &&!event.isComposing&&!view.composing&&!controller?.state().composing){
+            event.preventDefault();
+            if(!event.repeat)jump.click();
+            return true;
+          }
           if(event.key==='Enter'&&event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&openCurrentBlock()){
             event.preventDefault();return true;
           }
@@ -321,7 +328,15 @@ function install(snapshot) {
           if (formatView.key(view, event)) return true;
           return false; // Existing Tiptap Backspace command and source gate perform the edit.
         },
-        mousedown: finishCompositionForPointer,
+        mousedown: (view,event)=>{
+          if(finishCompositionForPointer(view,event))return true;
+          // Selecting the enclosing PM atom on mouseup can replace the button
+          // between mousedown and click. Navigation owns this pointer gesture.
+          if(event.button===0&&event.target.closest?.('button[data-preview-jump]')&&!view.composing&&!controller?.state().composing){
+            event.preventDefault();return true;
+          }
+          return false;
+        },
         paste: (view, event) => imagePaste.paste(event)||pastePlainText(view, event, { state: controller?.state(),
           blocked: activeInvalid() || loading || readOnlyDocument(), report: viewerStatus }),
         drop: (view, event) => dropImage(view,event,{paste:imagePaste,state:controller?.state(),blocked:activeInvalid()||loading||readOnlyDocument(),report:viewerStatus}),

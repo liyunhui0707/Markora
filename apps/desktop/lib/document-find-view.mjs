@@ -7,34 +7,54 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 export const FIND_LIMIT = 1000;
 export const FIND_QUERY_LIMIT = 256;
 // Search rendered text, preserving PM offsets across inline marks. Never join blocks
-// or inline non-text nodes. Regex metacharacters are always literal user text.
+// or hard breaks. Inline previews contribute read-only display text. Regex metacharacters are always literal user text.
 export function findDocumentText(doc, query, matchCase = false, previewTree = (node)=>node.attrs.tree) {
   const matches = []; let total = 0;
   if (!query || query.length > FIND_QUERY_LIMIT) return { matches, total };
   const pattern = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), matchCase ? 'gu' : 'giu');
-  function scan(text, start, previewOffset=null) {
-    pattern.lastIndex = 0;
-    for (const hit of text.matchAll(pattern)) {
+  function scan(parts){
+    if(!parts.length)return;
+    const text=parts.map(part=>part.text).join('');
+    let index=0,start=0;
+    for(const match of text.matchAll(pattern)){
       total++;
-      if (matches.length < FIND_LIMIT) matches.push(previewOffset!==null ? {from:start,to:start+1,preview:true,
-        offset:previewOffset+hit.index,text:hit[0]} : { from: start + hit.index, to: start + hit.index + hit[0].length });
+      if(matches.length>=FIND_LIMIT)continue;
+      while(start+parts[index].text.length<=match.index)start+=parts[index++].text.length;
+      const end=match.index+match[0].length,pieces=[];
+      for(let i=index,at=start;at<end;i++){
+        const part=parts[i],lo=Math.max(0,match.index-at),hi=Math.min(part.text.length,end-at);
+        if(part.offset!==undefined){
+          pieces.push({from:part.pos,to:part.pos+1,preview:true,offset:part.offset+lo,text:part.text.slice(lo,hi)});
+        }else pieces.push({from:part.pos+lo,to:part.pos+hi});
+        at+=part.text.length;
+      }
+      const from=pieces[0].from,to=pieces.at(-1).to;
+      if(pieces.length===1)matches.push(pieces[0]);
+      else if(pieces.some(piece=>piece.preview))matches.push({from,to,preview:true,pieces});
+      else matches.push({from,to});
     }
   }
-  function scanPreview(node,pos){
+  doc.descendants((node,pos)=>{
+    const parts=[];
+    function flush(){scan(parts);parts.length=0;}
+    function addPreview(child,position){
+      const runs=previewTextRuns(previewTree(child,position));
       let offset=0;
-      for(const run of previewTextRuns(previewTree(node,pos))){scan(run,pos,offset);offset+=run.length;}
-  }
-  doc.descendants((node, pos) => {
-    if(node.type.name==='documentPreview'){scanPreview(node,pos);return false;}
-    if (!node.isTextblock) return;
-    let text = '', start = pos + 1;
-    node.forEach((child, offset) => {
-      if (child.isText) {
-        if (!text) start = pos + 1 + offset;
-        text += child.text;
-      } else { scan(text, start); text = ''; if(child.type.name==='inlineDocumentPreview')scanPreview(child,pos+1+offset); }
+      for(const [i,text] of runs.entries()){
+        if(i)flush();
+        parts.push({text,pos:position,offset});offset+=text.length;
+      }
+      if(!runs.length)flush();
+    }
+    if(node.type.name==='documentPreview'){addPreview(node,pos);flush();return false;}
+    if(!node.isTextblock)return;
+    node.forEach((child,offset)=>{
+      const position=pos+1+offset;
+      if(child.isText)parts.push({text:child.text,pos:position});
+      else if(child.type.name==='inlineDocumentPreview')addPreview(child,position);
+      else flush();
     });
-    scan(text, start); return false;
+    flush();return false;
   });
   return { matches, total };
 }
@@ -86,6 +106,22 @@ function previewRange(view,hit){
   range.setStart(...start);range.setEnd(...end);
   return range.toString()===hit.text?range:null;
 }
+function highlightRanges(view,hit){
+  if(!hit?.preview)return [];
+  const ranges=[];
+  for(const piece of hit.pieces??[hit]){
+    if(piece.preview){
+      const range=previewRange(view,piece);
+      if(!range)return [];
+      ranges.push(range);
+    }else{
+      const a=view.domAtPos(piece.from,1),b=view.domAtPos(piece.to,-1);
+      const range=view.dom.ownerDocument.createRange();
+      range.setStart(a.node,a.offset);range.setEnd(b.node,b.offset);ranges.push(range);
+    }
+  }
+  return ranges;
+}
 export function createFindPlugin() {
   return new Plugin({ key, state: {
     init: () => DecorationSet.empty,
@@ -113,13 +149,17 @@ export function createFindView({ byId, context }) {
   function publish() {
     const { editor } = context();
     clearHighlight();
-    const current=matches[active],needsBlock=current?.preview&&(!registry||!previewRange(editor.view,current));
+    const current=matches[active],needsBlock=current?.preview&&(!registry||!highlightRanges(editor.view,current).length);
     const decorations = matches.flatMap((m, i) => m.preview?[]:[Decoration.inline(m.from, m.to,
       { class: 'document-find-hit' + (i === active ? ' is-current' : ''), 'data-find-index': String(i) })]);
-    if(needsBlock)decorations.push(Decoration.node(current.from,current.to,{class:'document-find-hit is-current'}));
+    if(needsBlock)for(const piece of current.pieces??[current]){
+      const attrs={class:'document-find-hit is-current'};
+      decorations.push(piece.preview?Decoration.node(piece.from,piece.to,attrs):Decoration.inline(piece.from,piece.to,attrs));
+    }
     editor.view.dispatch(editor.state.tr.setMeta(key, DecorationSet.create(editor.state.doc, decorations)).setMeta('addToHistory', false));
-    activeRange=previewRange(editor.view,matches[active]);
-    if(activeRange&&registry)registry.set(previewHighlight,new doc.defaultView.Highlight(activeRange));
+    const ranges=highlightRanges(editor.view,current);
+    activeRange=ranges[0]??null;
+    if(activeRange&&registry)registry.set(previewHighlight,new doc.defaultView.Highlight(...ranges));
   }
   byId('editor').addEventListener('markora-preview-rendered',()=>{
     if(opened){mapped=null;sync();}

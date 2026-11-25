@@ -27,5 +27,5 @@ const DocumentStarterKit=StarterKit.extend({addExtensions(){
 }});
 const SourceCodeBlock=CodeBlock.extend({addAttributes(){return {...this.parent?.(),sourceEditable:{default:false,rendered:false}};}});
 export function documentEditorExtensions(onTaskToggle, imageNodeView = null) {
-  return [DocumentPreview,InlineDocumentPreview,DocumentImage.configure({nodeView:imageNodeView}),...documentTableNodes, DocumentStarterKit.configure({ undoRedo: false, trailingNode: false, link: false, codeBlock: false, listItem: false }), SourceLink, SourceCodeBlock, taskListItem(onTaskToggle)];
+  return [DocumentPreview,InlineDocumentPreview,DocumentImage.configure({nodeView:imageNodeView}),...documentTableNodes, DocumentStarterKit.configure({ heading:{HTMLAttributes:{tabindex:'-1'}}, undoRedo: false, trailingNode: false, link: false, codeBlock: false, listItem: false }), SourceLink, SourceCodeBlock, taskListItem(onTaskToggle)];
 }

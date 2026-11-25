@@ -6,7 +6,8 @@ const tags=new Set(['div','button','section','p','h1','h2','h3','h4','h5','h6','
 export function previewDOMSpec(tree){
  if(typeof tree==='string')return tree;
  if(!tree||!tags.has(tree.tag)||!Array.isArray(tree.children))return ['span',{},'无法预览，请查看源码'];
- const attrs={};if(typeof tree.title==='string')attrs.title=tree.title;
+ const attrs={};if(/^h[1-6]$/.test(tree.tag))attrs.tabindex='-1';
+ if(typeof tree.title==='string')attrs.title=tree.title;
  if(['th','td'].includes(tree.tag)&&['left','right','center'].includes(tree.align))attrs['data-align']=tree.align;
  if(typeof tree.formula==='string'){attrs['data-formula']=tree.formula;attrs['data-math-display']=String(tree.display);}
  if(typeof tree.diagram==='string')attrs['data-diagram']=tree.diagram;

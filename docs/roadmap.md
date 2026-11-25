@@ -1,5 +1,9 @@
 # Project Roadmap — Markora
 
+## Mixed Markdown authoring · 0.87.0
+
+MD-10 covers visible inline search and source-aware Wiki recognition. MD-11 extends precise text edits to supported mixed containers. MD-12 verifies these operations in the real editor and records their limits in the [format matrix](markdown-compatibility.md).
+
 ## Markdown authoring · 0.86.0
 
 MD-07 covers partial and complete addresses, MD-08 covers contextual typing, inline previews and navigation, and MD-09 pins known specification divergences and writing regressions. See the [format matrix](markdown-compatibility.md).

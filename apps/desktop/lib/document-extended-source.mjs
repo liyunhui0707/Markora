@@ -1,24 +1,12 @@
 // Fallback for parser-owned text in structures outside the ordinary fast planners.
 // Every editable boundary is derived from the source and checked against the AST.
-import {extensionTree} from './document-extension-preview.mjs';
-import {decodeString} from 'micromark-util-decode-string';
+import {extensionTree, decodedOffsets, wikiParts, alertMarker} from './document-extension-preview.mjs';
 import {copyEditedBlock} from './document-edit-projection.mjs';
 import {equalCanonicalProjection} from './document-canonical-equal.mjs';
 import capacity from './document-capacity.js';
 import {containerNodeAt,containerPosition} from './document-container-source.mjs';
 
 const reject=()=>({ok:false,code:'unsafe-source-range'});
-function decodedOffsets(raw,value,start){
-  if(raw===value)return {start};
-  let text='',offsets=[start];
-  for(const m of raw.matchAll(/\\[!-/:-@\[-`{-~]|&(?:#[0-9]{1,7}|#x[\da-fA-F]{1,6}|[a-zA-Z][a-zA-Z0-9]*);|\r\n|[\s\S]/gu)){
-    const token=decodeString(m[0]).replace(/\r\n?|\n/g,' ');
-    for(let i=1;i<=token.length;i++)offsets.push(i===token.length?start+m.index+m[0].length:null);
-    text+=token;
-  }
-  return text===value?{start,offsets}:null;
-}
-
 export function projectExtended(node,source,position,definitions){
   const start=node.position.start.offset,end=node.position.end.offset;
   if(end-start>32768 || /^:::/.test(source.slice(start,start+3)))return null;
@@ -41,17 +29,15 @@ export function projectExtended(node,source,position,definitions){
       return [atom(n.type,extensionTree(n,null,0,source))];
     if(n.type==='html')return [atom('html',{tag:'code',children:[raw]})];
     if(n.type==='text'&&raw.includes('[[')){
-      const wiki=extensionTree(n,null,0,source);
+      const wiki=wikiParts(n,source);
       if(wiki){
-        const result=[];let cursor=a;
-        for(const part of wiki.children){
-          if(typeof part==='string'){
-            result.push(...text(part,{start:cursor},marks,[...path.slice(0,-1),path.at(-1)+result.length]));
-            cursor+=part.length;
-          }else{
-            const close=source.indexOf(']]',cursor+2);
-            if(close<cursor||close+2>b)return null;
-            result.push(atom('wiki',part));cursor=close+2;
+        const result=[];
+        for(const part of wiki){
+          if(part.tree)result.push(atom('wiki',part.tree));
+          else{
+            const value=part.text.replace(/\r\n?|\n/g,' ');
+            result.push(...text(value,decodedOffsets(source.slice(part.start,part.end),value,part.start),
+              marks,[...path.slice(0,-1),path.at(-1)+result.length]));
           }
         }
         return result;
@@ -91,6 +77,7 @@ export function projectExtended(node,source,position,definitions){
   function block(n,path,depth=0){
     if(depth>12 || (n.type==='blockquote'&&depth>=6) || (n.type==='list'&&depth>=12))return null;
     if(n.type==='code'&&depth>0)return null;
+    if(n.type==='blockquote'&&alertMarker(n))return null;
     if(['listItem','blockquote'].includes(n.type)&&++rowCount>32)return null;
     const type=({paragraph:'paragraph',heading:'heading',blockquote:'blockquote',list:n.ordered?'orderedList':'bulletList',listItem:'listItem',code:'codeBlock',table:'table',tableRow:'tableRow'})[n.type];
     if(!type)return null;
@@ -131,6 +118,13 @@ export function projectExtended(node,source,position,definitions){
         for(const [j,cell] of row.children.entries()){
           pos+=2;const parts=[];
           for(const child of cell.children){const run=inline(child,[],[...path,i,j,0,parts.length]);if(!run)return null;parts.push(...run);}
+          if(!cell.children.length){
+            const start=cell.position.start.offset;
+            const raw=source.slice(start,cell.position.end.offset);
+            const padding=raw.match(/^(\|?)([ \t]*)\|?$/);
+            if(padding)leaves.push({from:pos,to:pos,start:start+padding[1].length+Math.min(1,padding[2].length),
+              path:[...path,i,j,0,0],emptyCell:true});
+          }
           pos+=2;cells.push({type:i?'tableCell':'tableHeader',attrs:{align:n.align[j]},content:[{type:'paragraph',content:parts}]});
         }
         pos++;content.push({type:'tableRow',content:cells});
@@ -189,9 +183,10 @@ export function mapExtendedText(source,projection,{from,to,insert},project){
     }
     const expected=copyEditedBlock(projection.doc,block.index);
     let parent=expected.content[block.index];for(const step of leaf.path.slice(0,-1))parent=parent.content[step];
-    const i=leaf.path.at(-1),text=parent.content[i].text;
+    const i=leaf.path.at(-1),text=leaf.emptyCell?'':parent.content[i].text;
     const value=text.slice(0,from-leaf.from)+insert+text.slice(to-leaf.from);
-    if(value)parent.content[i].text=value;else parent.content.splice(i,1);
+    if(leaf.emptyCell){if(value)parent.content.push({type:'text',text:value});}
+    else if(value)parent.content[i].text=value;else parent.content.splice(i,1);
     let rawInsert=insert;
     if(type==='table')rawInsert=insert.replaceAll('|','\\|');
     if(type==='codeBlock'&&insert.includes('\n')){

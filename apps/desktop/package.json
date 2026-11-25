@@ -1,6 +1,6 @@
 {
   "name": "markora-desktop",
-  "version": "0.86.0",
+  "version": "0.87.0",
   "description": "markora — a local Markdown editor for macOS",
   "main": "document-app-main.js",
   "scripts": {
