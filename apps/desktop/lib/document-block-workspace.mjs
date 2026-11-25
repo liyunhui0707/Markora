@@ -51,6 +51,6 @@ export function followPreviewJump(button,root,report){
   if(!target){report('当前文档中找不到此位置。',true);return;}
   target.scrollIntoView({block:'center'});
   const focus=target.matches('button')?target:target.querySelector('button')||target;
-  if(!focus.matches('button'))focus.tabIndex=-1;
+  if(!focus.matches('button,[tabindex]'))focus.tabIndex=-1;
   focus.focus({preventScroll:true});
 }

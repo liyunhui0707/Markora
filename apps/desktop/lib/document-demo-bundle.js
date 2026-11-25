@@ -14880,6 +14880,7 @@
     if (typeof tree === "string") return tree;
     if (!tree || !tags.has(tree.tag) || !Array.isArray(tree.children)) return ["span", {}, "\u65E0\u6CD5\u9884\u89C8\uFF0C\u8BF7\u67E5\u770B\u6E90\u7801"];
     const attrs = {};
+    if (/^h[1-6]$/.test(tree.tag)) attrs.tabindex = "-1";
     if (typeof tree.title === "string") attrs.title = tree.title;
     if (["th", "td"].includes(tree.tag) && ["left", "right", "center"].includes(tree.align)) attrs["data-align"] = tree.align;
     if (typeof tree.formula === "string") {
@@ -16657,7 +16658,7 @@
     }
     target.scrollIntoView({ block: "center" });
     const focus2 = target.matches("button") ? target : target.querySelector("button") || target;
-    if (!focus2.matches("button")) focus2.tabIndex = -1;
+    if (!focus2.matches("button,[tabindex]")) focus2.tabIndex = -1;
     focus2.focus({ preventScroll: true });
   }
 
@@ -65705,7 +65706,7 @@ ${prefix2}
     return { ...this.parent?.(), sourceEditable: { default: false, rendered: false } };
   } });
   function documentEditorExtensions(onTaskToggle, imageNodeView = null) {
-    return [DocumentPreview, InlineDocumentPreview, DocumentImage.configure({ nodeView: imageNodeView }), ...documentTableNodes, DocumentStarterKit.configure({ undoRedo: false, trailingNode: false, link: false, codeBlock: false, listItem: false }), SourceLink, SourceCodeBlock, taskListItem(onTaskToggle)];
+    return [DocumentPreview, InlineDocumentPreview, DocumentImage.configure({ nodeView: imageNodeView }), ...documentTableNodes, DocumentStarterKit.configure({ heading: { HTMLAttributes: { tabindex: "-1" } }, undoRedo: false, trailingNode: false, link: false, codeBlock: false, listItem: false }), SourceLink, SourceCodeBlock, taskListItem(onTaskToggle)];
   }
 
   // lib/document-copy-actions-view.mjs
@@ -68068,6 +68069,12 @@ ${r.visibleText ?? "[unavailable]"}` : ""}`).join("\n\n----\n\n");
               return true;
             },
             keydown: (view, event) => {
+              const jump = event.target.closest?.("button[data-preview-jump]");
+              if (jump && ["Enter", " "].includes(event.key) && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.isComposing && !view.composing && !controller?.state().composing) {
+                event.preventDefault();
+                if (!event.repeat) jump.click();
+                return true;
+              }
               if (event.key === "Enter" && event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && openCurrentBlock()) {
                 event.preventDefault();
                 return true;
@@ -68087,7 +68094,14 @@ ${r.visibleText ?? "[unavailable]"}` : ""}`).join("\n\n----\n\n");
               if (formatView.key(view, event)) return true;
               return false;
             },
-            mousedown: finishCompositionForPointer,
+            mousedown: (view, event) => {
+              if (finishCompositionForPointer(view, event)) return true;
+              if (event.button === 0 && event.target.closest?.("button[data-preview-jump]") && !view.composing && !controller?.state().composing) {
+                event.preventDefault();
+                return true;
+              }
+              return false;
+            },
             paste: (view, event) => imagePaste.paste(event) || pastePlainText(view, event, {
               state: controller?.state(),
               blocked: activeInvalid() || loading2 || readOnlyDocument(),

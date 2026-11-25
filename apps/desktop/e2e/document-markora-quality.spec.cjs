@@ -60,8 +60,17 @@ test('markora quality workflow: typed delimiters, precise preview hits and byte-
       }
       await page.locator('#find-close').click();
       const wiki=editor.locator('[data-preview-jump="wiki"]');
-      await expect(wiki).toHaveText('结论');await wiki.click();
-      await expect(editor.getByRole('heading',{name:'航行说明'})).toBeFocused();
+      await expect(wiki).toHaveText('结论');
+      const heading=editor.getByRole('heading',{name:'航行说明'});
+      const selection=()=>editor.evaluate(el=>el.editor.state.selection.toJSON());
+      const originalSelection=await selection();
+      await wiki.click();await expect(heading).toBeFocused();
+      expect(await selection()).toEqual(originalSelection);
+      for(const key of ['Enter','Space']){
+        await wiki.focus();await page.keyboard.press(key);
+        await expect(heading).toBeFocused();
+        expect((await snapshot()).source).toBe(source);
+      }
       if(writing){
         const place=async(locator,offset)=>locator.evaluate((element,offset)=>{
           const view=element.closest('.tiptap').editor.view;
